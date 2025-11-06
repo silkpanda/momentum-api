@@ -8,10 +8,16 @@ import { IFamilyMember } from '../models/FamilyMember';
 
 // Helper function to generate a JWT (used by both signup and login)
 const signToken = (id: string, householdRefId: string): string => {
-  // The payload contains the user ID and their primary household context
-  return jwt.sign({ id, householdRefId }, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
-  });
+  // Payload contains the user ID and their primary household context
+  const payload = { id, householdRefId };
+  
+  // Options object containing the expiration time
+  const options = { 
+      expiresIn: JWT_EXPIRES_IN 
+  };
+  
+  // Use the synchronous version of sign(payload, secret, options)
+  return jwt.sign(payload, JWT_SECRET, options);
 };
 
 /**
@@ -34,16 +40,16 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
     const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 
     // 2. Create the Parent FamilyMember document
-    const newParent: IFamilyMember = await FamilyMember.create({
+    const newParent = await FamilyMember.create({
       firstName,
       email,
       role: 'Parent', // Mandatory role assignment
-      password: hashedPassword, // Note: We will add the password field to the Schema later
+      password: hashedPassword, 
       householdRefs: [], // Temporarily empty
     });
     
-    // We need the ID of the newly created Parent
-    const parentId = newParent._id;
+    // FIX APPLIED: Explicitly assert the type of newParent before accessing _id
+    const parentId = (newParent as IFamilyMember)._id; 
 
     // 3. Create the initial Household
     const newHousehold = await Household.create({
@@ -55,7 +61,8 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
     const householdId = newHousehold._id;
     
     // 4. Update the Parent's FamilyMember document with the new Household reference
-    await FamilyMember.findByIdAndUpdate(parentId, {
+    // We use parentId.toString() here to ensure the ID is a plain string for the query
+    await FamilyMember.findByIdAndUpdate(parentId.toString(), {
       $push: { householdRefs: householdId }
     });
 
@@ -89,5 +96,4 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
     });
   }
 };
-
 // ... login and protection logic will go here later
