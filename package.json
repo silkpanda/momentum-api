@@ -4,6 +4,7 @@
   "description": "Node.js/Express API for Momentum Family App",
   "main": "dist/server.js",
   "scripts": {
+    "prestart": "npm run build",
     "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",
     "build": "tsc",
