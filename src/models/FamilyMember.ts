@@ -10,6 +10,8 @@ export interface IFamilyMember extends Document {
   // CRITICAL ADDITIONS for Authentication:
   password?: string; // Stored hash (optional for children)
   passwordChangedAt?: Date;
+  // Custom method signature for checking password
+  comparePassword(candidatePassword: string): Promise<boolean>; // ADDED
 }
 
 // Schema definition
@@ -57,6 +59,18 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
     collection: 'familymembers', 
   },
 );
+
+// ADDED: Instance method to compare candidate password with the stored hash
+FamilyMemberSchema.methods.comparePassword = async function(
+  candidatePassword: string
+): Promise<boolean> {
+  // If the password field was not selected, return false immediately
+  if (!this.password) return false;
+  
+  // Use bcrypt to compare the plain text password with the hashed password
+  return bcrypt.compare(candidatePassword, this.password);
+};
+
 
 // We should also add a pre-save hook to hash the password here, 
 // ensuring consistency, but for now, we rely on the controller logic.

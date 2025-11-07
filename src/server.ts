@@ -5,6 +5,8 @@ import cors from 'cors';
 import * as dotenv from 'dotenv';
 // CRITICAL ADDITION: Import the authentication router
 import authRouter from './routes/authRoutes'; 
+// NEW ADDITION: Import the household router
+import householdRouter from './routes/householdRoutes'; 
 
 // 1. Load Environment Variables
 dotenv.config();
@@ -50,6 +52,9 @@ app.use(express.json()); // Parse JSON bodies
 // 4. API Routes
 // Register Auth routes first
 app.use('/api/v1/auth', authRouter);
+// NEW ROUTE REGISTRATION: Register Household routes
+app.use('/api/v1/households', householdRouter);
+
 
 // Basic Health Check Route
 app.get('/api/health', (req, res) => {

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { protect } from '../middleware/authMiddleware';
 import { restrictTo } from '../controllers/authController';
-import { createHousehold, addFamilyMember } from '../controllers/householdController';
+import { createHousehold } from '../controllers/householdController';
 
 // Mandatory camelCase variable name for the Router instance
 const router = Router();
@@ -9,13 +9,10 @@ const router = Router();
 // All routes after this middleware will be protected and restricted to 'Parent' role
 router.use(protect, restrictTo('Parent'));
 
-// Households (Create)
-// POST /api/v1/households
+// POST /api/v1/households (Create Household)
+// The parent's ID is pulled from the JWT payload by the 'protect' middleware
 router.route('/').post(createHousehold);
 
-// FamilyMember Management (Add Member)
-// POST /api/v1/households/:id/members
-// The :id parameter is the Household ID
-router.route('/:id/members').post(addFamilyMember);
+// Routes for listing, updating, deleting will follow here in Phase 2.2
 
 export default router;
