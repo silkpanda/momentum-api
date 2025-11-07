@@ -1,9 +1,11 @@
+// silkpanda/momentum-api/momentum-api-556c5b7b5d534751fdc505eedf6113f20a02cc98/src/controllers/householdController.ts
 import { Response } from 'express';
 import mongoose, { Types } from 'mongoose';
 import Household, { IHousehold } from '../models/Household'; // <-- FIX APPLIED: Import IHousehold
-import FamilyMember from '../models/FamilyMember';
+import FamilyMember, { IFamilyMember } from '../models/FamilyMember';
 import { IAuthRequest } from '../middleware/authMiddleware';
-import { IFamilyMember } from '../models/FamilyMember';
+import Task from '../models/Task'; // <-- NEW IMPORT: Required for cascaded delete
+import StoreItem from '../models/StoreItem'; // <-- NEW IMPORT: Required for cascaded delete
 
 // -----------------------------------------------------------------------------
 // HELPER: Utility Functions and Constants
@@ -239,7 +241,8 @@ export const deleteHousehold = async (req: IAuthRequest, res: Response): Promise
     );
     
     // 3. Delete all associated Tasks and StoreItems (CRITICAL cleanup)
-    // TODO: Implement cascaded delete/cleanup for Tasks and StoreItems related to the household.
+    await Task.deleteMany({ householdRefId: deletedHousehold._id });
+    await StoreItem.deleteMany({ householdRefId: deletedHousehold._id });
 
     // Successful deletion returns 204 No Content
     res.status(204).json({

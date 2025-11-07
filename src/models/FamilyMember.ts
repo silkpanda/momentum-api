@@ -1,5 +1,7 @@
+// silkpanda/momentum-api/momentum-api-556c5b7b5d534751fdc505eedf6113f20a02cc98/src/models/FamilyMember.ts
 import { Schema, model, Document, Types } from 'mongoose';
 import bcrypt from 'bcryptjs'; // Import bcryptjs for pre-save hook
+import { BCRYPT_SALT_ROUNDS } from '../config/constants'; // <-- NEW IMPORT
 
 // Interface for the document, using PascalCase for the interface name
 export interface IFamilyMember extends Document {
@@ -60,6 +62,21 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
   },
 );
 
+// NEW: Pre-save hook to hash the password before saving
+FamilyMemberSchema.pre('save', async function(next) {
+    // Only run this function if password was actually modified AND it exists (i.e., it's a Parent)
+    if (!this.isModified('password') || !this.password) return next();
+    
+    // Hash the password with cost factor defined in constants
+    this.password = await bcrypt.hash(this.password, BCRYPT_SALT_ROUNDS);
+    
+    // Update the password change timestamp (used for invalidating old JWTs)
+    this.passwordChangedAt = new Date(Date.now() - 1000); // 1 second ago to ensure it's before the JWT creation timestamp
+    
+    next();
+});
+
+
 // ADDED: Instance method to compare candidate password with the stored hash
 FamilyMemberSchema.methods.comparePassword = async function(
   candidatePassword: string
@@ -71,9 +88,6 @@ FamilyMemberSchema.methods.comparePassword = async function(
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-
-// We should also add a pre-save hook to hash the password here, 
-// ensuring consistency, but for now, we rely on the controller logic.
 
 // Mandatory PascalCase Model name
 const FamilyMember = model<IFamilyMember>('FamilyMember', FamilyMemberSchema); 

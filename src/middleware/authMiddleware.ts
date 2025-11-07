@@ -1,3 +1,4 @@
+// silkpanda/momentum-api/momentum-api-556c5b7b5d534751fdc505eedf6113f20a02cc98/src/middleware/authMiddleware.ts
 import { Request, Response, NextFunction } from 'express';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { Types } from 'mongoose';
@@ -63,7 +64,8 @@ export const protect = async (
     // 4. Grant access to protected route
     // Inject user and household ID into the request object for downstream controllers
     req.user = currentUser;
-    req.householdId = new Types.ObjectId(householdRefId); 
+    // FIX APPLIED: Use the constructor to convert string to ObjectId cleanly
+    req.householdId = new Types.ObjectId(householdRefId as string); 
     next();
   } catch (err: any) {
     // Handle specific JWT errors (e.g., expired, invalid signature)

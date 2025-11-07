@@ -1,3 +1,4 @@
+// silkpanda/momentum-api/momentum-api-556c5b7b5d534751fdc505eedf6113f20a02cc98/src/server.ts
 import express from 'express';
 import mongoose from 'mongoose';
 import { ServerApiVersion } from 'mongodb'; 
@@ -11,6 +12,7 @@ import householdRouter from './routes/householdRoutes';
 import taskRouter from './routes/taskRoutes';
 // NEW ADDITION: Import the store item router
 import storeItemRouter from './routes/storeItemRoutes';
+// REMOVED: import transactionRouter from './routes/transactionRoutes';
 
 // 1. Load Environment Variables
 dotenv.config();
@@ -62,6 +64,7 @@ app.use('/api/v1/households', householdRouter);
 app.use('/api/v1/tasks', taskRouter);
 // NEW ROUTE REGISTRATION: Register Store Item routes
 app.use('/api/v1/store-items', storeItemRouter);
+// REMOVED: app.use('/api/v1/transactions', transactionRouter);
 
 
 // Basic Health Check Route
