@@ -7,6 +7,10 @@ import * as dotenv from 'dotenv';
 import authRouter from './routes/authRoutes'; 
 // NEW ADDITION: Import the household router
 import householdRouter from './routes/householdRoutes'; 
+// NEW ADDITION: Import the task router
+import taskRouter from './routes/taskRoutes';
+// NEW ADDITION: Import the store item router
+import storeItemRouter from './routes/storeItemRoutes';
 
 // 1. Load Environment Variables
 dotenv.config();
@@ -54,6 +58,10 @@ app.use(express.json()); // Parse JSON bodies
 app.use('/api/v1/auth', authRouter);
 // NEW ROUTE REGISTRATION: Register Household routes
 app.use('/api/v1/households', householdRouter);
+// NEW ROUTE REGISTRATION: Register Task routes
+app.use('/api/v1/tasks', taskRouter);
+// NEW ROUTE REGISTRATION: Register Store Item routes
+app.use('/api/v1/store-items', storeItemRouter);
 
 
 // Basic Health Check Route
