@@ -1,58 +1,68 @@
+// src/models/Household.ts
 import { Schema, model, Document, Types } from 'mongoose';
 
-// Interface for embedded point/profile data specific to a Household
+// Per Governance v3, Sec 2.C
+// This sub-document defines a member's role and status *within* this household.
 export interface IHouseholdMemberProfile {
-  memberRefId: Types.ObjectId; // Reference to the FamilyMember (User) document
-  profileColor: string; // The member's designated color *in this household*
-  pointsTotal: number; // The member's points *in this household*
+  _id?: Types.ObjectId; // <-- FIX: Made _id optional, as Mongoose generates it on creation
+  familyMemberId: Types.ObjectId; // Reference to the global IFamilyMember
+  displayName: string;          // Household-specific display name (e.g., "Papa Bear")
+  profileColor: string;         // Household-specific color from the palette
+  role: 'Parent' | 'Child';     // Role *within* this household
+  pointsTotal?: number;         // FIX: Made optional, as schema provides a default of 0
 }
 
-// Interface for the Household document
+// Interface for the main Household document
 export interface IHousehold extends Document {
   householdName: string; // e.g., "Smith-Jones Family"
-  parentRefs: Types.ObjectId[]; // Array of references to FamilyMember documents (Parents)
-  childProfiles: IHouseholdMemberProfile[]; // Embedded array of child-specific data
+  
+  // The new mandatory, unified array (replaces parentRefs and childProfiles)
+  memberProfiles: IHouseholdMemberProfile[];
+  
+  // Other household-level data (e.g., tasks, store items) will be linked here
 }
 
 // Sub-schema for the embedded member profile data (camelCase, mandatory fields)
 const HouseholdMemberProfileSchema = new Schema<IHouseholdMemberProfile>({
-  memberRefId: { 
+  familyMemberId: { 
     type: Schema.Types.ObjectId,
-    ref: 'FamilyMember', // Reference to the actual user profile
+    ref: 'FamilyMember', // Reference to the global user
     required: true,
-    // Object References must use camelCase + Id suffix (e.g., memberRefId)
+  },
+  displayName: {
+    type: String,
+    required: [true, 'Display name is required'],
+    trim: true,
   },
   profileColor: {
     type: String,
-    required: true,
+    required: [true, 'Profile color is required'],
+  },
+  role: {
+    type: String,
+    enum: ['Parent', 'Child'],
+    required: [true, 'Member role is required'],
   },
   pointsTotal: {
     type: Number,
     default: 0,
     min: 0,
   },
-}, { _id: false }); // No separate _id needed for embedded sub-documents
+}, { 
+  // This setting ensures Mongoose auto-generates the '_id' for this sub-document
+  _id: true 
+});
 
-// Household Schema definition
+// Main Household Schema definition
 const HouseholdSchema = new Schema<IHousehold>(
   {
     householdName: {
       type: String,
-      required: true,
+      required: [true, 'Household name is required'],
       trim: true,
     },
-    parentRefs: {
-      // Parents have a simple 1:N reference array.
-      type: [
-        {
-          type: Schema.Types.ObjectId,
-          ref: 'FamilyMember',
-        },
-      ],
-      required: true, // Must have at least one parent
-    },
-    // The core list of children with their Household-specific data
-    childProfiles: { 
+    // The new unified array, replacing the deprecated v2 model
+    memberProfiles: { 
       type: [HouseholdMemberProfileSchema],
       default: [],
     },

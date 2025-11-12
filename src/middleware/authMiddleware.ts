@@ -1,84 +1,74 @@
-// silkpanda/momentum-api/momentum-api-556c5b7b5d534751fdc505eedf6113f20a02cc98/src/middleware/authMiddleware.ts
+// src/middleware/authMiddleware.ts
 import { Request, Response, NextFunction } from 'express';
-import jwt, { JwtPayload } from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
+import asyncHandler from 'express-async-handler'; // Required for protect function
+import FamilyMember, { IFamilyMember } from '../models/FamilyMember';
+import AppError from '../utils/AppError';
 import { Types } from 'mongoose';
-import FamilyMember from '../models/FamilyMember';
-import { JWT_SECRET } from '../config/constants';
-import { IFamilyMember } from '../models/FamilyMember';
 
-// Extend the Express Request interface to include the user and household information
-// This allows other middleware/controllers to access the authenticated user data.
-export interface IAuthRequest extends Request {
-  user?: IFamilyMember;
-  householdId?: Types.ObjectId; // The primary household context from the JWT payload
+// Define the shape of the user payload stored in the JWT
+interface JwtPayload extends jwt.JwtPayload {
+  id: string;
 }
 
-// -----------------------------------------------------------------------------
-// 1. JWT Protection Middleware (Auth Guard)
-// -----------------------------------------------------------------------------
+// CRITICAL FIX: Define the custom Request interface used in our controllers
+// It extends Express's Request and adds the user document property
+export interface AuthenticatedRequest extends Request {
+  user?: IFamilyMember; // Adds the fetched user document to the request object
+}
 
-export const protect = async (
-  req: IAuthRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    let token: string | undefined;
+// Middleware function to protect routes
+export const protect = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    let token;
 
     // 1. Get token and check if it exists
     if (
       req.headers.authorization &&
       req.headers.authorization.startsWith('Bearer')
     ) {
-      // Example: 'Bearer tokenValue' -> ['Bearer', 'tokenValue']
       token = req.headers.authorization.split(' ')[1];
     }
 
     if (!token) {
-      res.status(401).json({
-        status: 'fail',
-        message: 'You are not logged in. Please log in to get access.',
-      });
-      return;
+      return next(
+        new AppError('You are not logged in! Please log in to get access.', 401),
+      );
     }
 
     // 2. Verification token
-    // The jwt.verify returns the payload if verification succeeds.
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
-
-    // The JWT payload contains the user ID ('id') and their primary household context ('householdRefId')
-    const { id: userId, householdRefId } = decoded;
+    // We assume JWT_SECRET is set in the environment
+    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload;
 
     // 3. Check if user still exists
-    // We explicitly exclude the password since it's sensitive.
-    const currentUser = await FamilyMember.findById(userId);
+    // The decoded token ID is the FamilyMember ID
+    const currentUser = await FamilyMember.findById(decoded.id);
 
     if (!currentUser) {
-      res.status(401).json({
-        status: 'fail',
-        message: 'The user belonging to this token no longer exists.',
-      });
-      return;
+      return next(
+        new AppError(
+          'The user belonging to this token no longer exists.',
+          401,
+        ),
+      );
+    }
+    
+    // 4. Check if user changed password after the token was issued 
+    if (currentUser.passwordChangedAt) {
+        const passwordChangedTimestamp = currentUser.passwordChangedAt.getTime() / 1000;
+        
+        // JWT payload 'iat' (issued at) is in seconds
+        if (passwordChangedTimestamp > (decoded.iat as number)) {
+            return next(
+                new AppError('User recently changed password! Please log in again.', 401)
+            );
+        }
     }
 
-    // 4. Grant access to protected route
-    // Inject user and household ID into the request object for downstream controllers
+    // GRANT ACCESS TO PROTECTED ROUTE
+    // Attach the user document to the request for controller access (req.user)
     req.user = currentUser;
-    // FIX APPLIED: Use the constructor to convert string to ObjectId cleanly
-    req.householdId = new Types.ObjectId(householdRefId as string); 
+    
     next();
-  } catch (err: any) {
-    // Handle specific JWT errors (e.g., expired, invalid signature)
-    let message = 'Invalid token.';
-    if (err.name === 'TokenExpiredError') {
-      message = 'Your token has expired. Please log in again.';
-    } else if (err.name === 'JsonWebTokenError') {
-      message = 'Invalid token signature.';
-    }
-
-    res.status(401).json({
-      status: 'fail',
-      message: message,
-    });
-  }
-};
+  },
+);

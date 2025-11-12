@@ -1,50 +1,60 @@
-// silkpanda/momentum-api/momentum-api-556c5b7b5d534751fdc505eedf6113f20a02cc98/src/routes/householdRoutes.ts
-import { Router } from 'express';
+// src/routes/householdRoutes.ts
+import express from 'express';
 import { protect } from '../middleware/authMiddleware';
-import { restrictTo } from '../controllers/authController';
-import { 
+import {
   createHousehold,
-  getAllHouseholds,
-  getHousehold,
-  updateHousehold,
-  deleteHousehold,
-  addFamilyMember,
-  updateFamilyMember,
-  deleteFamilyMember,
+  getMyHouseholds,
+  addMemberToHousehold,
+  updateMemberProfile,
+  removeMemberFromHousehold,
 } from '../controllers/householdController';
 
-// Mandatory camelCase variable name for the Router instance
-const router = Router();
+const router = express.Router();
 
-// All routes after this middleware will be protected and restricted to 'Parent' role
-router.use(protect, restrictTo('Parent'));
+// All routes below require a logged-in user, so we apply the 'protect' middleware first.
+router.use(protect);
 
-// Routes for listing all households and creating a new household (Parent CRUD)
-// GET /api/v1/households
-// POST /api/v1/households
-router.route('/')
-    .get(getAllHouseholds) // Get all households the Parent belongs to
-    .post(createHousehold); // Create a new household
+// -----------------------------------------------------------
+// A. Core Household Routes (GET / POST)
+// -----------------------------------------------------------
 
-// Routes for individual household operations (Parent CRUD)
-// GET /api/v1/households/:id
-// PATCH /api/v1/households/:id
-// DELETE /api/v1/households/:id
-router.route('/:id')
-    .get(getHousehold) // Get single household
-    .patch(updateHousehold) // Update household details (e.g., name)
-    .delete(deleteHousehold); // Delete household
+// @route   POST /api/households
+// @desc    Create a new household (and adds the user as the first Parent member)
+// @access  Private
+router.route('/').post(createHousehold);
+
+// @route   GET /api/households
+// @desc    Get all households the logged-in user is a member of (for co-parenting support)
+// @access  Private
+router.route('/').get(getMyHouseholds);
 
 
-// Nested routes for Family Member Management (Child Profiles)
-// POST /api/v1/households/:id/members (Add Member)
-router.route('/:id/members')
-    .post(addFamilyMember); 
+// -----------------------------------------------------------
+// B. Household Member Management Routes
+// -----------------------------------------------------------
+// These routes implement the new "Unified Membership Model" CRUD API
+// The routes are nested under /households/:householdId as requested by the blueprint
 
-// PATCH /api/v1/households/:id/members/:memberId (Update Member)
-// DELETE /api/v1/households/:id/members/:memberId (Delete Member)
-router.route('/:id/members/:memberId')
-    .patch(updateFamilyMember)
-    .delete(deleteFamilyMember);
+// @route   POST /api/households/:householdId/members
+// @desc    Add a new member to the household (Parent or Child)
+// @access  Private (Parent role only, enforced in controller)
+router
+  .route('/:householdId/members')
+  .post(addMemberToHousehold);
+
+// @route   PATCH /api/households/:householdId/members/:memberProfileId
+// @desc    Update a member's profile (displayName, color, role) within the household
+// @access  Private (Parent role only, enforced in controller)
+router
+  .route('/:householdId/members/:memberProfileId')
+  .patch(updateMemberProfile);
+
+// @route   DELETE /api/households/:householdId/members/:memberProfileId
+// @desc    Remove a member from the household
+// @access  Private (Parent role only, enforced in controller)
+router
+  .route('/:householdId/members/:memberProfileId')
+  .delete(removeMemberFromHousehold);
+
 
 export default router;
