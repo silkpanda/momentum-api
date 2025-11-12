@@ -1,3 +1,4 @@
+// silkpanda/momentum-api/momentum-api-4bb9d40ae33d74ece3537317b858a6dec075ce78/src/controllers/authController.ts
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
@@ -40,15 +41,13 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    // 1. Hash the password
-    const hashedPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
-
-    // 2. Create the Parent FamilyMember document
+    // 1. Create the Parent FamilyMember document
+    // The password will be hashed by the 'pre-save' hook in the FamilyMember model.
     const newParent = await FamilyMember.create({
       firstName,
       email,
       role: 'Parent', // Mandatory role assignment
-      password: hashedPassword, 
+      password: password, // Pass the PLAIN-TEXT password to the model
       householdRefs: [], // Temporarily empty
     });
     
