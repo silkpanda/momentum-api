@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getMe = exports.restrictTo = exports.login = exports.signup = void 0;
-const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const FamilyMember_1 = __importDefault(require("../models/FamilyMember"));
 const Household_1 = __importDefault(require("../models/Household"));
@@ -35,14 +34,13 @@ const signup = async (req, res) => {
             res.status(400).json({ status: 'fail', message: 'Missing mandatory fields: firstName, email, and password.' });
             return;
         }
-        // 1. Hash the password
-        const hashedPassword = await bcryptjs_1.default.hash(password, constants_1.BCRYPT_SALT_ROUNDS);
-        // 2. Create the Parent FamilyMember document
+        // 1. Create the Parent FamilyMember document
+        // The password will be hashed by the 'pre-save' hook in the FamilyMember model.
         const newParent = await FamilyMember_1.default.create({
             firstName,
             email,
             role: 'Parent', // Mandatory role assignment
-            password: hashedPassword,
+            password: password, // Pass the PLAIN-TEXT password to the model
             householdRefs: [], // Temporarily empty
         });
         // Explicitly assert the _id type to Types.ObjectId to resolve 'unknown'
