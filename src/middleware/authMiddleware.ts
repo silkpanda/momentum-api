@@ -5,16 +5,19 @@ import asyncHandler from 'express-async-handler'; // Required for protect functi
 import FamilyMember, { IFamilyMember } from '../models/FamilyMember';
 import AppError from '../utils/AppError';
 import { Types } from 'mongoose';
+import { JWT_SECRET } from '../config/constants'; // Import JWT_SECRET
 
 // Define the shape of the user payload stored in the JWT
 interface JwtPayload extends jwt.JwtPayload {
   id: string;
+  householdId: string; // The Household context ID
 }
 
 // CRITICAL FIX: Define the custom Request interface used in our controllers
-// It extends Express's Request and adds the user document property
+// It extends Express's Request and adds the user document and household context
 export interface AuthenticatedRequest extends Request {
   user?: IFamilyMember; // Adds the fetched user document to the request object
+  householdId?: Types.ObjectId; // Adds the household context ID from the JWT
 }
 
 // Middleware function to protect routes
@@ -37,8 +40,7 @@ export const protect = asyncHandler(
     }
 
     // 2. Verification token
-    // We assume JWT_SECRET is set in the environment
-    const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as JwtPayload;
+    const decoded = jwt.verify(token, JWT_SECRET as string) as JwtPayload;
 
     // 3. Check if user still exists
     // The decoded token ID is the FamilyMember ID
@@ -66,8 +68,9 @@ export const protect = asyncHandler(
     }
 
     // GRANT ACCESS TO PROTECTED ROUTE
-    // Attach the user document to the request for controller access (req.user)
+    // Attach the user document and household context to the request
     req.user = currentUser;
+    req.householdId = new Types.ObjectId(decoded.householdId); // Attach household context
     
     next();
   },

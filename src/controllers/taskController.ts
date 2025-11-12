@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import mongoose, { Types } from 'mongoose'; // <-- FIX: Import mongoose itself to access mongoose.Error.CastError
 import Task from '../models/Task';
-import { IAuthRequest } from '../middleware/authMiddleware';
+import { AuthenticatedRequest } from '../middleware/authMiddleware'; // <-- FIX: Renamed to AuthenticatedRequest
 
 // Helper to handle standard model CRUD response
 const handleResponse = (res: Response, status: number, message: string, data?: any): void => {
@@ -15,7 +15,7 @@ const handleResponse = (res: Response, status: number, message: string, data?: a
 /**
  * Get all Tasks for the authenticated user's primary Household. (Phase 2.4)
  */
-export const getAllTasks = async (req: IAuthRequest, res: Response): Promise<void> => {
+export const getAllTasks = async (req: AuthenticatedRequest, res: Response): Promise<void> => { // <-- FIX: Renamed to AuthenticatedRequest
   try {
     // Tasks must be retrieved within the user's household context
     const householdId = req.householdId; 
@@ -43,7 +43,7 @@ export const getAllTasks = async (req: IAuthRequest, res: Response): Promise<voi
 /**
  * Create a new Task for the authenticated user's primary Household. (Phase 2.4)
  */
-export const createTask = async (req: IAuthRequest, res: Response): Promise<void> => {
+export const createTask = async (req: AuthenticatedRequest, res: Response): Promise<void> => { // <-- FIX: Renamed to AuthenticatedRequest
   try {
     const { taskName, description, pointsValue, recurrence, assignedToRefs } = req.body;
     
@@ -85,7 +85,7 @@ export const createTask = async (req: IAuthRequest, res: Response): Promise<void
 /**
  * Get a single Task by ID. (Phase 2.4)
  */
-export const getTask = async (req: IAuthRequest, res: Response): Promise<void> => {
+export const getTask = async (req: AuthenticatedRequest, res: Response): Promise<void> => { // <-- FIX: Renamed to AuthenticatedRequest
   try {
     const taskId = req.params.id;
     const householdId = req.householdId;
@@ -116,7 +116,7 @@ export const getTask = async (req: IAuthRequest, res: Response): Promise<void> =
 /**
  * Update a Task by ID. (Phase 2.4)
  */
-export const updateTask = async (req: IAuthRequest, res: Response): Promise<void> => {
+export const updateTask = async (req: AuthenticatedRequest, res: Response): Promise<void> => { // <-- FIX: Renamed to AuthenticatedRequest
   try {
     const taskId = req.params.id;
     const householdId = req.householdId;
@@ -160,7 +160,7 @@ export const updateTask = async (req: IAuthRequest, res: Response): Promise<void
 /**
  * Delete a Task by ID. (Phase 2.4)
  */
-export const deleteTask = async (req: IAuthRequest, res: Response): Promise<void> => {
+export const deleteTask = async (req: AuthenticatedRequest, res: Response): Promise<void> => { // <-- FIX: Renamed to AuthenticatedRequest
   try {
     const taskId = req.params.id;
     const householdId = req.householdId;

@@ -1,26 +1,24 @@
-// silkpanda/momentum-api/momentum-api-4bb9d40ae33d74ece3537317b858a6dec075ce78/src/controllers/authController.ts
+// src/controllers/authController.ts
 import { Request, Response, NextFunction } from 'express';
-import bcrypt from 'bcryptjs';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { Types } from 'mongoose';
 import FamilyMember from '../models/FamilyMember';
-import Household from '../models/Household';
-import { JWT_SECRET, JWT_EXPIRES_IN, BCRYPT_SALT_ROUNDS } from '../config/constants';
+import Household, { IHouseholdMemberProfile } from '../models/Household'; // Import IHouseholdMemberProfile
+import { JWT_SECRET, JWT_EXPIRES_IN } from '../config/constants';
 import { IFamilyMember } from '../models/FamilyMember';
-import { IAuthRequest } from '../middleware/authMiddleware'; // Import the extended request interface
+import { AuthenticatedRequest } from '../middleware/authMiddleware'; // FIX: Use AuthenticatedRequest
+import AppError from '../utils/AppError';
+import asyncHandler from 'express-async-handler'; // NEW IMPORT for restrictTo
 
 // Helper function to generate a JWT (used by both signup and login)
-const signToken = (id: string, householdRefId: string): string => {
-  // Payload contains the user ID and their primary household context
-  const payload = { id, householdRefId };
+const signToken = (id: string, householdId: string): string => {
+  // Payload contains the user ID and their *current context* household ID
+  const payload = { id, householdId };
   
-  // Options object containing the expiration time
   const options: SignOptions = { 
-      // FIX APPLIED: Type cast JWT_EXPIRES_IN to 'any' to bypass TS type mismatch
       expiresIn: JWT_EXPIRES_IN as any,
   };
   
-  // Use the synchronous version of sign(payload, secret, options)
   return jwt.sign(payload, JWT_SECRET, options);
 };
 
@@ -30,50 +28,47 @@ const signToken = (id: string, householdRefId: string): string => {
 
 /**
  * Controller function to handle Parent Sign-Up (Phase 2.1)
- * ... (No change) ...
+ * Adheres to the new Unified Membership Model (v3)
  */
-export const signup = async (req: Request, res: Response): Promise<void> => {
+export const signup = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const { firstName, lastName, email, password } = req.body;
+  const { householdName, userDisplayName, userProfileColor } = req.body; // New fields for v3
+
+  if (!firstName || !lastName || !email || !password || !householdName || !userDisplayName || !userProfileColor) {
+    return next(new AppError('Missing mandatory fields for signup and initial household profile (firstName, lastName, email, password, householdName, userDisplayName, userProfileColor).', 400));
+  }
+
   try {
-    const { firstName, email, password } = req.body;
-
-    if (!firstName || !email || !password) {
-      res.status(400).json({ status: 'fail', message: 'Missing mandatory fields: firstName, email, and password.' });
-      return;
-    }
-
-    // 1. Create the Parent FamilyMember document
-    // The password will be hashed by the 'pre-save' hook in the FamilyMember model.
+    // 1. Create the Parent FamilyMember document (global identity)
     const newParent = await FamilyMember.create({
       firstName,
+      lastName,
       email,
-      role: 'Parent', // Mandatory role assignment
-      password: password, // Pass the PLAIN-TEXT password to the model
-      householdRefs: [], // Temporarily empty
+      password, // Hashed by the 'pre-save' hook
     });
     
-    // Explicitly assert the _id type to Types.ObjectId to resolve 'unknown'
-    const parentId: Types.ObjectId = (newParent as IFamilyMember)._id as Types.ObjectId; 
+    const parentId: Types.ObjectId = newParent._id as Types.ObjectId; 
+    
+    // 2. Create the initial Parent Profile sub-document for the Household
+    const creatorProfile: IHouseholdMemberProfile = {
+        familyMemberId: parentId, 
+        displayName: userDisplayName,
+        profileColor: userProfileColor,
+        role: 'Parent', // The creator is always a Parent
+        pointsTotal: 0,
+    };
 
-    // 3. Create the initial Household
+    // 3. Create the initial Household, linking the parent's profile
     const newHousehold = await Household.create({
-      householdName: `${firstName}'s Household`,
-      parentRefs: [parentId], // Link the new parent immediately
-      childProfiles: [], // Start with no children
+      householdName,
+      memberProfiles: [creatorProfile], //
     });
 
-    // Explicitly assert the _id type to Types.ObjectId to resolve 'unknown'
     const householdId: Types.ObjectId = newHousehold._id as Types.ObjectId;
     
-    // 4. Update the Parent's FamilyMember document with the new Household reference
-    // We use parentId.toString() here to ensure the ID is a plain string for the query
-    await FamilyMember.findByIdAndUpdate(parentId.toString(), {
-      $push: { householdRefs: householdId }
-    });
-
-    // 5. Generate and return JWT (Parent is automatically logged in)
+    // 4. Generate and return JWT
     const token = signToken(parentId.toString(), householdId.toString());
 
-    // Successful response
     res.status(201).json({
       status: 'success',
       token,
@@ -86,106 +81,128 @@ export const signup = async (req: Request, res: Response): Promise<void> => {
   } catch (err: any) {
     // Handle duplicate key error (email already exists)
     if (err.code === 11000) { 
-      res.status(409).json({
-        status: 'fail',
-        message: 'This email address is already registered.',
-      });
-      return;
+      return next(new AppError('This email address is already registered.', 409));
     }
-
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to create user or household.',
-      error: err.message,
-    });
+    return next(new AppError(`Failed to create user or household: ${err.message}`, 500));
   }
-};
+});
 
 /**
  * Controller function to handle Parent Login (Phase 2.1)
- * ... (No change) ...
+ * Adheres to the new Unified Membership Model (v3)
  */
-export const login = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email, password } = req.body;
+export const login = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const { email, password } = req.body;
 
-    if (!email || !password) {
-      res.status(400).json({ status: 'fail', message: 'Please provide email and password.' });
-      return;
-    }
-
-    // 1. Find user by email and explicitly select the password field
-    const parent = await FamilyMember.findOne({ email }).select('+password');
-
-    // 2. Check if user exists and password is correct
-    // We also check for 'Parent' role for security and compliance with auth design.
-    const isPasswordCorrect =
-      parent && parent.role === 'Parent' && (await parent.comparePassword(password));
-
-    if (!isPasswordCorrect) {
-      res.status(401).json({
-        status: 'fail',
-        message: 'Incorrect email or password.',
-      });
-      return;
-    }
-
-    // CRITICAL: The Parent must belong to at least one household (created during signup)
-    const primaryHouseholdId = parent.householdRefs[0];
-
-    // 3. Generate JWT (Parent is now logged in)
-    // FIX APPLIED: Explicitly cast parent._id and primaryHouseholdId to Types.ObjectId 
-    const token = signToken(
-        (parent._id as Types.ObjectId).toString(), 
-        (primaryHouseholdId as Types.ObjectId).toString()
-    );
-
-    // Successful response
-    res.status(200).json({
-      status: 'success',
-      token,
-      data: {
-        parent,
-      },
-    });
-
-  } catch (err: any) {
-    res.status(500).json({
-      status: 'error',
-      message: 'Login failed.',
-      error: err.message,
-    });
+  if (!email || !password) {
+    return next(new AppError('Please provide email and password.', 400));
   }
-};
+
+  // 1. Find user by email and explicitly select the password field
+  const familyMember = await FamilyMember.findOne({ email }).select('+password');
+
+  // 2. Check if user exists and password is correct
+  const isPasswordCorrect =
+    familyMember && (await familyMember.comparePassword(password));
+
+  if (!isPasswordCorrect) {
+    return next(new AppError('Incorrect email or password.', 401));
+  }
+  
+  // 3. CRITICAL: Find a Household where this FamilyMember is a 'Parent'
+  const parentId: Types.ObjectId = familyMember._id as Types.ObjectId;
+  
+  const household = await Household.findOne({
+      'memberProfiles.familyMemberId': parentId,
+      'memberProfiles.role': 'Parent', //
+  });
+  
+  if (!household) {
+    return next(new AppError('User does not belong to any household as a Parent.', 401));
+  }
+  
+  // FIX: Explicitly cast _id to resolve 'unknown' type
+  const primaryHouseholdId: Types.ObjectId = household._id as Types.ObjectId;
+
+  // 4. Generate JWT
+  const token = signToken(
+      parentId.toString(), 
+      primaryHouseholdId.toString()
+  );
+
+  res.status(200).json({
+    status: 'success',
+    token,
+    data: {
+      parent: familyMember,
+      primaryHouseholdId,
+    },
+  });
+});
 
 // -----------------------------------------------------------------------------
-// 2. Authorization Middleware (Restrict by Role) - NEW FUNCTION
+// 2. Authorization Middleware (Restrict by Role)
 // -----------------------------------------------------------------------------
 
-// Factory function that returns the actual middleware
+/**
+ * Factory function that returns the actual middleware.
+ * This MUST run *after* the 'protect' middleware.
+ */
 export const restrictTo = (...roles: Array<'Parent' | 'Child'>) => {
-  return (req: IAuthRequest, res: Response, next: NextFunction) => {
-    // req.user is guaranteed to exist here because this middleware runs AFTER 'protect'
-    if (!req.user || !roles.includes(req.user.role)) {
-      res.status(403).json({
-        status: 'fail',
-        message: 'You do not have permission to perform this action.',
-      });
-      return;
+  return asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    
+    // 1. Check if user and householdId are attached by 'protect' middleware
+    if (!req.user || !req.householdId) {
+      return next(
+        new AppError(
+          'Role check failed: Missing user or household context from token.',
+          401,
+        ),
+      );
+    }
+    
+    // 2. Fetch the household from the database using the ID from the token
+    const currentHousehold = await Household.findById(req.householdId);
+    
+    if (!currentHousehold) {
+        return next(
+            new AppError(
+              'Role check failed: The household associated with your token no longer exists.',
+              401,
+            ),
+          );
     }
 
-    // User has the correct role, grant access
+    // 3. Find the user's profile *within* that household
+    // FIX APPLIED HERE: Cast req.user!._id to Types.ObjectId
+    const userHouseholdProfile = currentHousehold.memberProfiles.find(
+        (member) => member.familyMemberId.equals(req.user!._id as Types.ObjectId)
+    );
+    
+    // 4. Check if the profile exists and their role is allowed
+    if (!userHouseholdProfile || !roles.includes(userHouseholdProfile.role)) {
+      return next(
+        new AppError(
+          'You do not have permission to perform this action in this household.',
+          403,
+        ),
+      );
+    }
+
+    // 5. User has the correct role, grant access
     next();
-  };
+  });
 };
 
-// Example protected route for testing (will be moved later)
-export const getMe = (req: IAuthRequest, res: Response): void => {
+/**
+ * Protected route for testing
+ */
+export const getMe = (req: AuthenticatedRequest, res: Response): void => {
     res.status(200).json({
         status: 'success',
         data: {
             user: req.user,
-            householdId: req.householdId,
+            householdId: req.householdId, // This is the context ID from the JWT
         },
     });
 };

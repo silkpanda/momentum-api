@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import mongoose, { Types } from 'mongoose';
 import StoreItem from '../models/StoreItem';
-import { IAuthRequest } from '../middleware/authMiddleware';
+import { AuthenticatedRequest } from '../middleware/authMiddleware'; // <-- FIX: Renamed to AuthenticatedRequest
 
 // Helper to handle standard model CRUD response
 const handleResponse = (res: Response, status: number, message: string, data?: any): void => {
@@ -19,7 +19,7 @@ const handleResponse = (res: Response, status: number, message: string, data?: a
 /**
  * Get all StoreItems for the authenticated user's primary Household.
  */
-export const getAllStoreItems = async (req: IAuthRequest, res: Response): Promise<void> => {
+export const getAllStoreItems = async (req: AuthenticatedRequest, res: Response): Promise<void> => { // <-- FIX: Renamed to AuthenticatedRequest
   try {
     // Items must be retrieved within the user's household context
     const householdId = req.householdId; 
@@ -46,7 +46,7 @@ export const getAllStoreItems = async (req: IAuthRequest, res: Response): Promis
 /**
  * Create a new StoreItem for the authenticated user's primary Household.
  */
-export const createStoreItem = async (req: IAuthRequest, res: Response): Promise<void> => {
+export const createStoreItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => { // <-- FIX: Renamed to AuthenticatedRequest
   try {
     const { itemName, description, cost, isAvailable } = req.body;
     
@@ -86,7 +86,7 @@ export const createStoreItem = async (req: IAuthRequest, res: Response): Promise
 /**
  * Get a single StoreItem by ID.
  */
-export const getStoreItem = async (req: IAuthRequest, res: Response): Promise<void> => {
+export const getStoreItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => { // <-- FIX: Renamed to AuthenticatedRequest
   try {
     const itemId = req.params.id;
     const householdId = req.householdId;
@@ -116,7 +116,7 @@ export const getStoreItem = async (req: IAuthRequest, res: Response): Promise<vo
 /**
  * Update a StoreItem by ID.
  */
-export const updateStoreItem = async (req: IAuthRequest, res: Response): Promise<void> => {
+export const updateStoreItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => { // <-- FIX: Renamed to AuthenticatedRequest
   try {
     const itemId = req.params.id;
     const householdId = req.householdId;
@@ -158,7 +158,7 @@ export const updateStoreItem = async (req: IAuthRequest, res: Response): Promise
 /**
  * Delete a StoreItem by ID.
  */
-export const deleteStoreItem = async (req: IAuthRequest, res: Response): Promise<void> => {
+export const deleteStoreItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => { // <-- FIX: Renamed to AuthenticatedRequest
   try {
     const itemId = req.params.id;
     const householdId = req.householdId;
