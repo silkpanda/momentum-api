@@ -50,25 +50,38 @@ export const createHousehold = asyncHandler(
 );
 
 /**
- * @desc    Get all households the current user is a member of
+ * @desc    Get the primary household for the current user's session context (from JWT)
  * @route   GET /api/households
  * @access  Private
  */
 export const getMyHouseholds = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    // FIX: Assert the type of _id to Types.ObjectId
-    const familyMemberId = req.user?._id as Types.ObjectId; 
+    // CRITICAL FIX: Use the householdId from the JWT payload for the session context
+    const householdId = req.householdId; 
 
-    if (!familyMemberId) {
-      throw new AppError('Authentication error. User not found.', 401);
+    if (!householdId) {
+      throw new AppError('Household context not found in session token.', 401);
     }
 
-    // The query now safely uses the Types.ObjectId
-    const households = await Household.find({
-      'memberProfiles.familyMemberId': familyMemberId,
-    });
+    // 1. Find the single household using the ID from the token
+    const household = await Household.findById(householdId)
+      // Populate the nested memberProfiles.familyMemberId to get user details
+      .populate({
+        path: 'memberProfiles.familyMemberId',
+        select: 'firstName email', // Only select necessary fields
+      });
 
-    res.status(200).json(households);
+    if (!household) {
+      throw new AppError('Primary household not found.', 404);
+    }
+
+    // 2. Return success with the single household document in the expected structure
+    res.status(200).json({
+      status: 'success',
+      data: {
+        household,
+      },
+    });
   },
 );
 
