@@ -93,7 +93,9 @@ export const getMyHouseholds = asyncHandler(
 export const addMemberToHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { householdId } = req.params;
-    const { familyMemberId, displayName, profileColor, role } = req.body;
+    // familyMemberId will be present if adding an existing user (e.g., co-parent)
+    // firstName/displayName/profileColor/role are for creating a new child
+    let { familyMemberId, firstName, displayName, profileColor, role } = req.body;
     
     // FIX: Assert the type of _id to Types.ObjectId
     const loggedInUserId = req.user?._id as Types.ObjectId; 
@@ -102,13 +104,36 @@ export const addMemberToHousehold = asyncHandler(
         throw new AppError('Authentication error. User not found.', 401);
     }
 
-
-    if (!familyMemberId || !displayName || !profileColor || !role) {
-      throw new AppError(
-        'Missing required fields: familyMemberId, displayName, profileColor, and role are required.',
-        400,
-      );
+    if (!displayName || !profileColor || !role) {
+        // Only require firstName/role if creating a new member (i.e. missing familyMemberId)
+        if (!familyMemberId && (!firstName || !role)) {
+            throw new AppError(
+                'Missing required fields: displayName, profileColor, and role are required. For new members, firstName is also required.',
+                400,
+            );
+        }
+        // If familyMemberId is present, we assume other fields are already known/not needed for this flow.
     }
+    
+    // --- SCENARIO A: CREATE NEW CHILD PROFILE (Implicit Add) ---
+    if (!familyMemberId) {
+        if (role !== 'Child') {
+            throw new AppError('Only the "Child" role can be created through this endpoint without a familyMemberId.', 400);
+        }
+        
+        // 1. Create the new FamilyMember (Child) document
+        // We use a unique, placeholder email to satisfy the FamilyMember schema constraints.
+        const newChild = await FamilyMember.create({
+            firstName,
+            lastName: 'Household', // Placeholder last name for internal uniqueness
+            email: `${firstName.toLowerCase().replace(/\s/g, '')}-child-${new Date().getTime()}@momentum.com`, 
+            password: `temp-${Math.random()}`, // Dummy password to satisfy model requirement for now, though it should be optional for Children.
+        });
+
+        // Use the newly created ID for the rest of the function
+        familyMemberId = newChild._id;
+    }
+    // --- END SCENARIO A ---
 
     const household = await Household.findById(householdId);
 
@@ -142,7 +167,7 @@ export const addMemberToHousehold = asyncHandler(
       );
     }
 
-    // Check if the familyMemberId is a valid user
+    // Check if the resolved familyMemberId is a valid user
     const memberExists = await FamilyMember.findById(familyMemberId);
     if (!memberExists) {
       throw new AppError('No family member found with the provided ID.', 404);
@@ -151,17 +176,34 @@ export const addMemberToHousehold = asyncHandler(
     // Create the new member profile sub-document
     const newMemberProfile: IHouseholdMemberProfile = {
       familyMemberId: new Types.ObjectId(familyMemberId), 
-      displayName,
-      profileColor,
-      role,
+      displayName: displayName || memberExists.firstName, // Use display name from body or fallback
+      profileColor: profileColor!,
+      role: role as 'Parent' | 'Child',
       pointsTotal: 0,
     };
 
     // Add to the array and save
     household.memberProfiles.push(newMemberProfile);
-    await household.save();
+    const updatedHousehold = await household.save();
 
-    res.status(201).json(household);
+    // The successful response should return the newly updated household with populated fields
+    const finalHousehold = await updatedHousehold.populate({
+        path: 'memberProfiles.familyMemberId',
+        select: 'firstName email', // Re-fetch the saved document with population
+    });
+
+    res.status(201).json({
+        status: 'success',
+        message: 'Member added to household successfully.',
+        data: {
+            household: finalHousehold,
+            // The frontend Modal expects the *new profile* to be returned, 
+            // so we'll grab it from the final document.
+            profile: finalHousehold.memberProfiles.find(
+                p => p.familyMemberId.equals(familyMemberId)
+            )
+        },
+    });
   },
 );
 
