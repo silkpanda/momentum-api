@@ -1,71 +1,74 @@
+// silkpanda/momentum-api/momentum-api-234e21f44dd55f086a321bc9901934f98b747c7a/src/models/Task.ts
 import { Schema, model, Document, Types } from 'mongoose';
+import { IHouseholdMemberProfile } from './Household'; // This is needed
 
-// Define the simple recurrence options for the MVP
-type RecurrenceType = 'None' | 'Daily' | 'Weekly';
-
-// Interface for the Task document
-export interface ITask extends Document {
-  taskName: string; 
-  description: string;
-  pointsValue: number;
-  recurrence: RecurrenceType;
-  // This array links to the FamilyMember documents who are assigned this task
-  assignedToRefs: Types.ObjectId[]; 
-  // CRITICAL: Links the task to the Household context
-  householdRefId: Types.ObjectId; 
-  // For tasks that are manually checked off (not recurring resets)
-  isCompleted: boolean;
+/**
+ * Interface definition for a Task.
+ *
+ * --- THIS IS THE FIX ---
+ * We remove `extends Document`. Mongoose will add the Document properties
+ * automatically at compile time via the `model<ITask>` call.
+ * This resolves the conflict that causes the 'status' property error.
+ */
+export interface ITask {
+  householdId: Types.ObjectId;
+  title: string;
+  description?: string;
+  assignedTo: IHouseholdMemberProfile['_id']; // Ref to sub-doc ID
+  points: number;
+  status: 'Pending' | 'Completed' | 'Approved';
+  schedule?: {
+    type: 'Daily' | 'Weekly' | 'Once';
+    // Additional fields as needed, e.g., dayOfWeek for Weekly
+  };
+  createdBy: Types.ObjectId; // Ref to FamilyMember
+  completedBy?: Types.ObjectId; // Ref to FamilyMember
+  completedAt?: Date;
+  approvedBy?: Types.ObjectId; // Ref to FamilyMember
+  approvedAt?: Date;
 }
 
 // Schema definition
-const TaskSchema = new Schema<ITask>(
+const taskSchema = new Schema<ITask>(
   {
-    taskName: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    description: {
-      type: String,
-      trim: true,
-    },
-    pointsValue: {
-      type: Number,
-      required: true,
-      min: 1, // Tasks must give at least 1 point
-    },
-    recurrence: {
-      type: String,
-      enum: ['None', 'Daily', 'Weekly'],
-      default: 'None',
-    },
-    assignedToRefs: {
-      type: [
-        {
-          type: Schema.Types.ObjectId,
-          ref: 'FamilyMember',
-        },
-      ],
-      default: [],
-      // Using 'assignedToRefs' adheres to the 'camelCase + Ref/Id' naming for array references
-    },
-    householdRefId: {
+    householdId: {
       type: Schema.Types.ObjectId,
       ref: 'Household',
       required: true,
     },
-    isCompleted: {
-      type: Boolean,
-      default: false,
+    title: { type: String, required: true },
+    description: { type: String },
+    assignedTo: {
+      type: Schema.Types.ObjectId, // This is IHouseholdMemberProfile['_id']
+      required: true,
     },
+    points: { type: Number, required: true, min: 0 },
+    status: {
+      type: String,
+      enum: ['Pending', 'Completed', 'Approved'],
+      default: 'Pending',
+      required: true,
+    },
+    schedule: {
+      type: { type: String, enum: ['Daily', 'Weekly', 'Once'] },
+    },
+    createdBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'FamilyMember',
+      required: true,
+    },
+    completedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'FamilyMember',
+    },
+    completedAt: { type: Date },
+    approvedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'FamilyMember',
+    },
+    approvedAt: { type: Date },
   },
-  {
-    timestamps: true,
-    collection: 'tasks', // Mandatory lowercase_plural collection name
-  },
+  { timestamps: true }, // Adds createdAt and updatedAt
 );
 
-// Mandatory PascalCase Model name
-const Task = model<ITask>('Task', TaskSchema);
-
-export default Task;
+export default model<ITask>('Task', taskSchema);

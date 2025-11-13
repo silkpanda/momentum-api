@@ -1,301 +1,237 @@
-import { Response } from 'express';
-import mongoose, { Types } from 'mongoose'; 
+// silkpanda/momentum-api/momentum-api-234e21f44dd55f086a321bc9901934f98b747c7a/src/controllers/taskController.ts
+import { Request, Response } from 'express';
+import asyncHandler from 'express-async-handler';
 import Task from '../models/Task';
 import { AuthenticatedRequest } from '../middleware/authMiddleware'; 
-import Household, { IHouseholdMemberProfile } from '../models/Household';
-import { IFamilyMember } from '../models/FamilyMember'; 
-
-// Helper interface for the data shape sent back to the frontend
-interface ITransformedProfile {
-  _id: string;
-  displayName: string;
-  profileColor?: string;
-}
-
-// Helper to handle standard model CRUD response
-const handleResponse = (res: Response, status: number, message: string, data?: any): void => {
-  res.status(status).json({
-    status: status >= 400 ? 'fail' : 'success',
-    message,
-    data: data ? { task: data } : undefined,
-  });
-};
+import AppError from '../utils/AppError'; 
+import { Types } from 'mongoose';
 
 /**
- * Helper function to merge populated FamilyMember references on tasks
- * with their corresponding HouseholdMemberProfile data (displayName, profileColor).
- * This ensures the frontend gets the household-specific details.
+ * @desc    Get all tasks for the user's household
+ * @route   GET /api/tasks
+ * @access  Private
  */
-const mapAssignedMembers = (
-  tasks: any[], // Mongoose task documents, with assignedToRefs populated (FamilyMember documents)
-  memberProfiles: IHouseholdMemberProfile[] // The full memberProfiles array from the Household
-): any[] => {
-  return tasks.map(task => {
-    // Convert Mongoose document to plain object for manipulation
-    const taskObject = task.toObject ? task.toObject() : task; 
-
-    // Check if assignedToRefs is present and populated
-    if (!taskObject.assignedToRefs || taskObject.assignedToRefs.length === 0) {
-      return {
-        ...taskObject, 
-        assignedToProfileIds: [], 
-      };
-    }
-
-    // Map each FamilyMember to their corresponding HouseholdMemberProfile
-    const assignedProfiles = (taskObject.assignedToRefs as IFamilyMember[])
-      // Explicitly type parameters to resolve TypeScript implicit 'any' error (ts(7006))
-      .map((familyMemberDoc: IFamilyMember) => {
-        
-        // Explicitly cast _id to Types.ObjectId to bypass the 'unknown' error (ts(18046))
-        const familyMemberId = familyMemberDoc._id as Types.ObjectId;
-
-        // Find the profile in the Household using the FamilyMember _id
-        const profile = memberProfiles.find((p: IHouseholdMemberProfile) => 
-            p.familyMemberId.toString() === familyMemberId.toString()
-        );
-
-        if (profile) {
-          // Return the specific data shape the frontend expects
-          return {
-            _id: familyMemberId.toString(), // Use the explicitly typed ID
-            displayName: profile.displayName,
-            profileColor: profile.profileColor,
-          } as ITransformedProfile;
-        }
-        return null; 
-      })
-      // FIX: Explicitly type parameter 'p' to eliminate the last 'implicit any' error.
-      // Uses a type guard to filter out null values.
-      .filter((p: ITransformedProfile | null): p is ITransformedProfile => p !== null);
-
-    // Return the task object with the new, correctly structured field
-    return {
-      ...taskObject, 
-      assignedToProfileIds: assignedProfiles, 
-    };
-  });
-};
-
-
-/**
- * Get all Tasks for the authenticated user's primary Household. (Phase 2.4)
- */
-export const getAllTasks = async (req: AuthenticatedRequest, res: Response): Promise<void> => { 
-  try {
+export const getAllTasks = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
     const householdId = req.householdId; 
-    
+
     if (!householdId) {
-      handleResponse(res, 400, 'Household context is missing from request.');
-      return;
+      throw new AppError('Household context not found in session token.', 401);
     }
+    
+    const tasks = await Task.find({ householdId });
 
-    // 1. Fetch the Household's member profiles to use for mapping
-    const household = await Household.findById(householdId).select('memberProfiles');
-
-    if (!household) {
-         handleResponse(res, 404, 'Household not found.');
-         return;
-    }
-
-    // 2. Fetch Tasks and populate the FamilyMember references
-    const rawTasks = await Task.find({ householdRefId: householdId })
-        .populate('assignedToRefs'); 
-
-    // 3. Transform the tasks to include the correct household profile data
-    const tasks = mapAssignedMembers(rawTasks, household.memberProfiles);
-
+    // --- MOBILE APP FIX (KEPT) ---
     res.status(200).json({
       status: 'success',
       results: tasks.length,
-      data: {
-        tasks,
-      },
+      data: tasks, // <-- This is the fix for the mobile app
     });
-  } catch (err: any) {
-    handleResponse(res, 500, 'Failed to retrieve tasks.', { error: err.message });
-  }
-};
-
+  },
+);
 
 /**
- * Create a new Task for the authenticated user's primary Household. (Phase 2.4)
+ * @desc    Create a new task
+ * @route   POST /api/tasks
+ * @access  Private (Parent only)
  */
-export const createTask = async (req: AuthenticatedRequest, res: Response): Promise<void> => { 
-  try {
-    const { taskName, description, pointsValue, recurrence, assignedToRefs } = req.body;
-    
-    // Validate mandatory fields
-    if (!taskName || !pointsValue) {
-      handleResponse(res, 400, 'Missing mandatory fields: taskName and pointsValue.');
-      return;
-    }
-    
-    const householdId = req.householdId;
-    
-    if (!householdId) {
-      handleResponse(res, 400, 'Household context is missing from request.');
-      return;
-    }
-
-    // Create the task, linking it to the Household from the JWT payload
-    const newTask = await Task.create({
-      taskName,
+export const createTask = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const {
+      title,
       description,
-      pointsValue,
-      recurrence,
-      assignedToRefs,
-      householdRefId: householdId, // CRITICAL: Scope task to the Household
-      isCompleted: false, // Always start as false
+      assignedTo,
+      points,
+      schedule,
+    } = req.body;
+    
+    const householdId = req.householdId as Types.ObjectId; 
+
+    if (!householdId) {
+      throw new AppError('Household context not found in session token.', 401);
+    }
+
+    if (!title || !assignedTo || !points) {
+      throw new AppError(
+        'Missing required fields: title, assignedTo, and points are required.',
+        400,
+      );
+    }
+    
+    const task = await Task.create({
+      householdId,
+      title,
+      description,
+      assignedTo,
+      points,
+      status: 'Pending',
+      schedule, 
+      createdBy: req.user?._id as Types.ObjectId,
     });
 
-    handleResponse(res, 201, 'Task created successfully.', newTask);
-    
-  } catch (err: any) {
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to create task.',
-      error: err.message,
+    // --- MOBILE APP FIX (KEPT) ---
+    res.status(201).json({
+      status: 'success',
+      data: task, // <-- This is the fix for the mobile app
     });
-  }
-};
+  },
+);
 
 /**
- * Get a single Task by ID. (Phase 2.4)
+ * @desc    Get a single task by ID
+ * @route   GET /api/tasks/:id
+ * @access  Private
  */
-export const getTask = async (req: AuthenticatedRequest, res: Response): Promise<void> => { 
-  try {
-    const taskId = req.params.id;
-    const householdId = req.householdId;
-    
-    // 1. Fetch the Household's member profiles
-    const household = await Household.findById(householdId).select('memberProfiles');
+//
+// FIX: Reverted name back to 'getTask' as you requested
+//
+export const getTask = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const task = await Task.findById(req.params.id);
 
-    if (!household) {
-         handleResponse(res, 404, 'Household not found.');
-         return;
-    }
-
-    // 2. Fetch the Task and populate the FamilyMember references
-    const rawTask = await Task.findOne({
-      _id: taskId,
-      householdRefId: householdId,
-    }).populate('assignedToRefs'); 
-
-    if (!rawTask) {
-      handleResponse(res, 404, 'Task not found or does not belong to your household.');
-      return;
+    if (!task) {
+      throw new AppError('No task found with that ID', 404);
     }
     
-    // 3. Transform the single task
-    const tasks = mapAssignedMembers([rawTask], household.memberProfiles);
-    const task = tasks[0]; // Get the single transformed task
-
-    handleResponse(res, 200, 'Task retrieved successfully.', task);
-    
-  } catch (err: any) {
-    // FIX APPLIED: Use 'mongoose.Error.CastError' for correct TypeScript error checking
-    if (err instanceof mongoose.Error.CastError) { 
-      handleResponse(res, 400, 'Invalid task ID format.');
-      return;
-    }
-    handleResponse(res, 500, 'Failed to retrieve task.', { error: err.message });
-  }
-};
+    // --- MOBILE APP FIX (KEPT) ---
+    res.status(200).json({
+      status: 'success',
+      data: task, // <-- This is the fix for the mobile app
+    });
+  },
+);
 
 /**
- * Update a Task by ID. (Phase 2.4)
+ * @desc    Update a task (e.g., details, assignment)
+ * @route   PATCH /api/tasks/:id
+ * @access  Private (Parent only)
  */
-export const updateTask = async (req: AuthenticatedRequest, res: Response): Promise<void> => { 
-  try {
-    const taskId = req.params.id;
-    const householdId = req.householdId;
-    
-    // Prevent updating householdRefId or isCompleted status via this general update endpoint
-    const updates = { ...req.body };
-    delete updates.householdRefId; 
-    delete updates.isCompleted;
+export const updateTask = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { status, completedBy, approvedBy, ...updateData } = req.body;
 
-    // Find the task by ID and household ID, and then update it
-    const updatedTask = await Task.findOneAndUpdate(
-      {
-        _id: taskId,
-        householdRefId: householdId,
-      },
-      updates,
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedTask) {
-      handleResponse(res, 404, 'Task not found or does not belong to your household.');
-      return;
-    }
-    
-    // The client expects the updated task to have the member profile data.
-    
-    // 1. Fetch the Household's member profiles
-    const household = await Household.findById(householdId).select('memberProfiles');
-    
-    if (!household) {
-      // Should not happen if a task was just found/updated, but for safety:
-      handleResponse(res, 500, 'Failed to retrieve household for final data processing.');
-      return;
-    }
-
-    // 2. Fetch the updated Task and populate the FamilyMember references
-    const rawTask = await Task.findById(updatedTask._id).populate('assignedToRefs'); 
-    
-    // 3. Transform the single task
-    const tasks = mapAssignedMembers([rawTask], household.memberProfiles);
-    const task = tasks[0]; 
-
-    handleResponse(res, 200, 'Task updated successfully.', task);
-    
-  } catch (err: any) {
-    // FIX APPLIED: Use 'mongoose.Error.CastError' for correct TypeScript error checking
-    if (err instanceof mongoose.Error.CastError) {
-      handleResponse(res, 400, 'Invalid task ID format.');
-      return;
-    }
-    res.status(500).json({
-      status: 'error',
-      message: 'Failed to update task.',
-      error: err.message,
+    const task = await Task.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+      runValidators: true,
     });
-  }
-};
+
+    if (!task) {
+      throw new AppError('No task found with that ID', 404);
+    }
+    
+    // --- MOBILE APP FIX (KEPT) ---
+    res.status(200).json({
+      status: 'success',
+      data: task, // <-- This is the fix for the mobile app
+    });
+  },
+);
 
 /**
- * Delete a Task by ID. (Phase 2.4)
+ * @desc    Delete a task
+ * @route   DELETE /api/tasks/:id
+ * @access  Private (Parent only)
  */
-export const deleteTask = async (req: AuthenticatedRequest, res: Response): Promise<void> => { 
-  try {
-    const taskId = req.params.id;
-    const householdId = req.householdId;
+export const deleteTask = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const task = await Task.findByIdAndDelete(req.params.id);
 
-    // Find the task by ID AND ensure it belongs to the current household before deleting
-    const deletedTask = await Task.findOneAndDelete({
-      _id: taskId,
-      householdRefId: householdId,
-    });
-
-    if (!deletedTask) {
-      handleResponse(res, 404, 'Task not found or does not belong to your household.');
-      return;
+    if (!task) {
+      throw new AppError('No task found with that ID', 404);
     }
-
-    // Successful deletion returns 204 No Content
+    
     res.status(204).json({
       status: 'success',
       data: null,
     });
+  },
+);
 
-  } catch (err: any) {
-    // FIX APPLIED: Use 'mongoose.Error.CastError' for correct TypeScript error checking
-    if (err instanceof mongoose.Error.CastError) {
-      handleResponse(res, 400, 'Invalid task ID format.');
-      return;
+// --- TASK WORKFLOW METHODS ---
+
+/**
+ * @desc    Mark a task as completed by the assignee
+ * @route   PATCH /api/tasks/:id/complete
+ * @access  Private (Assigned user only)
+ */
+export const completeTask = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      throw new AppError('No task found with that ID', 404);
     }
-    handleResponse(res, 500, 'Failed to delete task.', { error: err.message });
-  }
-};
+    
+    if (task.status !== 'Pending') {
+        throw new AppError('Task is not pending and cannot be completed.', 400);
+    }
+
+    task.status = 'Completed';
+    task.completedBy = req.user?._id as Types.ObjectId;
+    task.completedAt = new Date();
+    await task.save();
+
+    res.status(200).json({
+      status: 'success',
+      data: task,
+    });
+  },
+);
+
+/**
+ * @desc    Approve a completed task
+ * @route   PATCH /api/tasks/:id/approve
+ * @access  Private (Parent only)
+ */
+export const approveTask = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      throw new AppError('No task found with that ID', 404);
+    }
+
+    if (task.status !== 'Completed') {
+      throw new AppError('Task is not completed and cannot be approved.', 400);
+    }
+
+    task.status = 'Approved';
+    task.approvedBy = req.user?._id as Types.ObjectId;
+    task.approvedAt = new Date();
+    await task.save();
+    
+    res.status(200).json({
+      status: 'success',
+      data: task,
+    });
+  },
+);
+
+/**
+ * @desc    Re-open a completed task (reject)
+ * @route   PATCH /api/tasks/:id/reopen
+ * @access  Private (Parent only)
+ */
+export const reopenTask = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const task = await Task.findById(req.params.id);
+
+    if (!task) {
+      throw new AppError('No task found with that ID', 404);
+    }
+
+    if (task.status !== 'Completed') {
+      throw new AppError('Only completed tasks can be reopened.', 400);
+    }
+
+    task.status = 'Pending';
+    task.completedBy = undefined;
+    task.completedAt = undefined;
+    await task.save();
+
+    res.status(200).json({
+      status: 'success',
+      data: task,
+    });
+  },
+);

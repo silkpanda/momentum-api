@@ -1,4 +1,4 @@
-// src/controllers/householdController.ts
+// silkpanda/momentum-api/momentum-api-234e21f44dd55f086a321bc9901934f98b747c7a/src/controllers/householdController.ts
 import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import Household, { IHouseholdMemberProfile } from '../models/Household';
@@ -75,12 +75,14 @@ export const getMyHouseholds = asyncHandler(
       throw new AppError('Primary household not found.', 404);
     }
 
-    // 2. Return success with the single household document in the expected structure
+    //
+    // --- THIS IS THE CRITICAL CHANGE ---
+    // We are no longer "double wrapping" the household object.
+    // The mobile app's fetcher expects the household data directly.
+    //
     res.status(200).json({
       status: 'success',
-      data: {
-        household,
-      },
+      data: household, // <-- WAS: { household: household }
     });
   },
 );
@@ -93,11 +95,8 @@ export const getMyHouseholds = asyncHandler(
 export const addMemberToHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { householdId } = req.params;
-    // familyMemberId will be present if adding an existing user (e.g., co-parent)
-    // firstName/displayName/profileColor/role are for creating a new child
     let { familyMemberId, firstName, displayName, profileColor, role } = req.body;
     
-    // FIX: Assert the type of _id to Types.ObjectId
     const loggedInUserId = req.user?._id as Types.ObjectId; 
 
     if (!loggedInUserId) {
@@ -105,35 +104,28 @@ export const addMemberToHousehold = asyncHandler(
     }
 
     if (!displayName || !profileColor || !role) {
-        // Only require firstName/role if creating a new member (i.e. missing familyMemberId)
         if (!familyMemberId && (!firstName || !role)) {
             throw new AppError(
                 'Missing required fields: displayName, profileColor, and role are required. For new members, firstName is also required.',
                 400,
             );
         }
-        // If familyMemberId is present, we assume other fields are already known/not needed for this flow.
     }
     
-    // --- SCENARIO A: CREATE NEW CHILD PROFILE (Implicit Add) ---
     if (!familyMemberId) {
         if (role !== 'Child') {
             throw new AppError('Only the "Child" role can be created through this endpoint without a familyMemberId.', 400);
         }
         
-        // 1. Create the new FamilyMember (Child) document
-        // We use a unique, placeholder email to satisfy the FamilyMember schema constraints.
         const newChild = await FamilyMember.create({
             firstName,
-            lastName: 'Household', // Placeholder last name for internal uniqueness
+            lastName: 'Household', 
             email: `${firstName.toLowerCase().replace(/\s/g, '')}-child-${new Date().getTime()}@momentum.com`, 
-            password: `temp-${Math.random()}`, // Dummy password to satisfy model requirement for now, though it should be optional for Children.
+            password: `temp-${Math.random()}`, 
         });
 
-        // Use the newly created ID for the rest of the function
         familyMemberId = newChild._id;
     }
-    // --- END SCENARIO A ---
 
     const household = await Household.findById(householdId);
 
@@ -141,9 +133,7 @@ export const addMemberToHousehold = asyncHandler(
       throw new AppError('Household not found.', 404);
     }
 
-    // SECURITY CHECK: Ensure the logged-in user is a 'Parent' in this household
     const isParent = household.memberProfiles.some(
-      // The comparison now safely uses the Types.ObjectId
       (member) =>
         member.familyMemberId.equals(loggedInUserId) && member.role === 'Parent',
     );
@@ -155,7 +145,6 @@ export const addMemberToHousehold = asyncHandler(
       );
     }
 
-    // Check if the user we are trying to add is already in this household
     const isAlreadyMember = household.memberProfiles.some((member) =>
       member.familyMemberId.equals(familyMemberId),
     );
@@ -167,29 +156,25 @@ export const addMemberToHousehold = asyncHandler(
       );
     }
 
-    // Check if the resolved familyMemberId is a valid user
     const memberExists = await FamilyMember.findById(familyMemberId);
     if (!memberExists) {
       throw new AppError('No family member found with the provided ID.', 404);
     }
 
-    // Create the new member profile sub-document
     const newMemberProfile: IHouseholdMemberProfile = {
       familyMemberId: new Types.ObjectId(familyMemberId), 
-      displayName: displayName || memberExists.firstName, // Use display name from body or fallback
+      displayName: displayName || memberExists.firstName,
       profileColor: profileColor!,
       role: role as 'Parent' | 'Child',
       pointsTotal: 0,
     };
 
-    // Add to the array and save
     household.memberProfiles.push(newMemberProfile);
     const updatedHousehold = await household.save();
 
-    // The successful response should return the newly updated household with populated fields
     const finalHousehold = await updatedHousehold.populate({
         path: 'memberProfiles.familyMemberId',
-        select: 'firstName email', // Re-fetch the saved document with population
+        select: 'firstName email',
     });
 
     res.status(201).json({
@@ -197,8 +182,6 @@ export const addMemberToHousehold = asyncHandler(
         message: 'Member added to household successfully.',
         data: {
             household: finalHousehold,
-            // The frontend Modal expects the *new profile* to be returned, 
-            // so we'll grab it from the final document.
             profile: finalHousehold.memberProfiles.find(
                 p => p.familyMemberId.equals(familyMemberId)
             )
@@ -217,7 +200,6 @@ export const updateMemberProfile = asyncHandler(
     const { householdId, memberProfileId } = req.params;
     const { displayName, profileColor, role } = req.body;
     
-    // FIX: Assert the type of _id to Types.ObjectId
     const loggedInUserId = req.user?._id as Types.ObjectId; 
 
     if (!loggedInUserId) {
@@ -230,9 +212,7 @@ export const updateMemberProfile = asyncHandler(
       throw new AppError('Household not found.', 404);
     }
 
-    // SECURITY CHECK: Ensure the logged-in user is a 'Parent' in this household
     const isParent = household.memberProfiles.some(
-      // The comparison now safely uses the Types.ObjectId
       (member) =>
         member.familyMemberId.equals(loggedInUserId) && member.role === 'Parent',
     );
@@ -244,7 +224,6 @@ export const updateMemberProfile = asyncHandler(
       );
     }
 
-    // Find the specific member profile sub-document by its unique _id
     const memberProfile = household.memberProfiles.find(
       (member) => member._id!.equals(memberProfileId),
     );
@@ -253,7 +232,6 @@ export const updateMemberProfile = asyncHandler(
       throw new AppError('Member profile not found in this household.', 404);
     }
 
-    // Update the fields
     if (displayName) memberProfile.displayName = displayName;
     if (profileColor) memberProfile.profileColor = profileColor;
     if (role) memberProfile.role = role;
@@ -273,7 +251,6 @@ export const removeMemberFromHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { householdId, memberProfileId } = req.params;
     
-    // FIX: Assert the type of _id to Types.ObjectId
     const loggedInUserId = req.user?._id as Types.ObjectId; 
 
     if (!loggedInUserId) {
@@ -286,9 +263,7 @@ export const removeMemberFromHousehold = asyncHandler(
       throw new AppError('Household not found.', 404);
     }
 
-    // SECURITY CHECK: Ensure the logged-in user is a 'Parent' in this household
     const isParent = household.memberProfiles.some(
-      // The comparison now safely uses the Types.ObjectId
       (member) =>
         member.familyMemberId.equals(loggedInUserId) && member.role === 'Parent',
     );
@@ -300,7 +275,6 @@ export const removeMemberFromHousehold = asyncHandler(
       );
     }
     
-    // Find the member profile to be removed
     const memberToRemove = household.memberProfiles.find(
       (member) => member._id!.equals(memberProfileId)
     );
@@ -309,7 +283,6 @@ export const removeMemberFromHousehold = asyncHandler(
       throw new AppError('Member profile not found in this household.', 404);
     }
     
-    // PREVENT DELETION: Cannot remove the last parent
     if (memberToRemove.role === 'Parent') {
       const parentCount = household.memberProfiles.filter(
         (m) => m.role === 'Parent'
@@ -322,7 +295,6 @@ export const removeMemberFromHousehold = asyncHandler(
       }
     }
 
-    // Pull the sub-document from the array
     household.memberProfiles = household.memberProfiles.filter(
       (member) => !member._id!.equals(memberProfileId)
     );
