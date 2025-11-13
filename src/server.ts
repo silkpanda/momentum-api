@@ -1,4 +1,4 @@
-// silkpanda/momentum-api/momentum-api-556c5b7b5d534751fdc505eedf6113f20a02cc98/src/server.ts
+// silkpanda/momentum-api/momentum-api-9cd056749dbc80f839350d7a816204f38ee8171d/src/server.ts
 import express from 'express';
 import mongoose from 'mongoose';
 import { ServerApiVersion } from 'mongodb'; 
@@ -13,6 +13,11 @@ import taskRouter from './routes/taskRoutes';
 // NEW ADDITION: Import the store item router
 import storeItemRouter from './routes/storeItemRoutes';
 // REMOVED: import transactionRouter from './routes/transactionRoutes';
+
+// NEW IMPORTS FOR ERROR HANDLING
+import AppError from './utils/AppError';
+// FIX APPLIED: Changed to named import for globalErrorHandler
+import { globalErrorHandler } from './utils/errorHandler'; 
 
 // 1. Load Environment Variables
 dotenv.config();
@@ -71,6 +76,17 @@ app.use('/api/v1/store-items', storeItemRouter);
 app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'API is running', environment: process.env.NODE_ENV });
 });
+
+// 4b. UNHANDLED ROUTE HANDLER
+// Catch all for routes not defined by the application
+app.all('*', (req, res, next) => {
+  // Use the AppError utility to create an operational error
+  next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
+});
+
+// 4c. GLOBAL ERROR HANDLER
+// This middleware runs whenever next(err) is called with an error object
+app.use(globalErrorHandler);
 
 // 5. Start Server
 const startServer = async () => {
