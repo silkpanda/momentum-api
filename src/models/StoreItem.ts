@@ -20,7 +20,9 @@ const StoreItemSchema = new Schema<IStoreItem>(
     },
     description: {
       type: String,
-      required: true,
+      // FIX: Changed from required: true to false
+      required: false,
+      default: '', // Add default empty string
     },
     cost: {
       type: Number,

@@ -50,9 +50,9 @@ export const createStoreItem = async (req: AuthenticatedRequest, res: Response):
   try {
     const { itemName, description, cost, isAvailable } = req.body;
     
-    // Validate mandatory fields
-    if (!itemName || !description || !cost) {
-      handleResponse(res, 400, 'Missing mandatory fields: itemName, description, and cost.');
+    // FIX: Remove 'description' from the validation check
+    if (!itemName || !cost) {
+      handleResponse(res, 400, 'Missing mandatory fields: itemName and cost.');
       return;
     }
     
@@ -66,7 +66,7 @@ export const createStoreItem = async (req: AuthenticatedRequest, res: Response):
     // Create the item, linking it to the Household from the JWT payload
     const newItem = await StoreItem.create({
       itemName,
-      description,
+      description, // This can now be an empty string
       cost,
       isAvailable,
       householdRefId: householdId, // CRITICAL: Scope item to the Household
