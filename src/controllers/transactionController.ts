@@ -47,18 +47,25 @@ export const completeTask = async (req: AuthenticatedRequest, res: Response): Pr
       return;
     }
     
-    if (task.isCompleted) {
+    // --- FIX 1: Check task.status, not task.isCompleted ---
+    if (task.status === 'Completed' || task.status === 'Approved') {
         handleResponse(res, 409, 'Task is already marked as complete.', {});
         return;
     }
 
+    // --- Note: The 'src/controllers/taskController.ts' has its own 'completeTask' logic.
+    // --- This controller is for the *transactional* part of completing a task.
+    // --- We will need to decide which controller *actually* handles this route.
+    // --- For now, I will assume this one does, and I'll update the task status here.
     const updatedTask = await Task.findByIdAndUpdate(
       taskId,
-      { isCompleted: true },
+      // --- FIX 1 (cont.): Set the status field ---
+      { status: 'Completed', completedBy: memberId, completedAt: new Date() },
       { new: true }
     );
     
-    const pointValue = task.pointsValue;
+    // --- FIX 2: Use task.points, not task.pointsValue ---
+    const pointValue = task.points;
     
     // FIX: Update 'memberProfiles' array instead of 'childProfiles'
     const updatedHousehold = await Household.findOneAndUpdate(
@@ -84,7 +91,8 @@ export const completeTask = async (req: AuthenticatedRequest, res: Response): Pr
       memberRefId: memberId,
       relatedRefId: new Types.ObjectId(taskId as string), 
       householdRefId: householdId,
-      transactionNote: `Completed task: ${task.taskName}`,
+      // --- FIX 3: Use task.title, not task.taskName ---
+      transactionNote: `Completed task: ${task.title}`,
     });
 
     // FIX: Find the updated points total from the 'memberProfiles' array
