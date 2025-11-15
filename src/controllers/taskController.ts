@@ -1,34 +1,11 @@
-// silkpanda/momentum-api/momentum-api-234e21f44dd55f086a321bc9901934f98b747c7a/src/controllers/taskController.ts
+// src/controllers/taskController.ts
 import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import Task from '../models/Task';
-import { AuthenticatedRequest } from '../middleware/authMiddleware'; 
-import AppError from '../utils/AppError'; 
+import Household from '../models/Household'; // <-- NEW IMPORT for awarding points
+import AppError from '../utils/AppError';
+import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { Types } from 'mongoose';
-
-/**
- * @desc    Get all tasks for the user's household
- * @route   GET /api/tasks
- * @access  Private
- */
-export const getAllTasks = asyncHandler(
-  async (req: AuthenticatedRequest, res: Response) => {
-    const householdId = req.householdId; 
-
-    if (!householdId) {
-      throw new AppError('Household context not found in session token.', 401);
-    }
-    
-    const tasks = await Task.find({ householdId });
-
-    // --- MOBILE APP FIX (KEPT) ---
-    res.status(200).json({
-      status: 'success',
-      results: tasks.length,
-      data: tasks, // <-- This is the fix for the mobile app
-    });
-  },
-);
 
 /**
  * @desc    Create a new task
@@ -37,109 +14,135 @@ export const getAllTasks = asyncHandler(
  */
 export const createTask = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    const {
-      title,
-      description,
-      assignedTo,
-      points,
-      schedule,
-    } = req.body;
-    
-    const householdId = req.householdId as Types.ObjectId; 
+    const { title, description, pointsValue, assignedTo, dueDate } = req.body;
+    const householdId = req.householdId; // From JWT
 
-    if (!householdId) {
-      throw new AppError('Household context not found in session token.', 401);
-    }
-
-    if (!title || !assignedTo || !points) {
+    if (!title || !pointsValue || !assignedTo || assignedTo.length === 0) {
       throw new AppError(
-        'Missing required fields: title, assignedTo, and points are required.',
+        'Missing required fields: title, pointsValue, and at least one assignedTo ID are required.',
         400,
       );
     }
-    
+
     const task = await Task.create({
       householdId,
       title,
       description,
-      assignedTo,
-      points,
-      status: 'Pending',
-      schedule, 
-      createdBy: req.user?._id as Types.ObjectId,
+      pointsValue,
+      assignedTo, // This should be an array of memberProfile _ids
+      dueDate,
+      status: 'Pending', // Default status
     });
 
-    // --- MOBILE APP FIX (KEPT) ---
     res.status(201).json({
       status: 'success',
-      data: task, // <-- This is the fix for the mobile app
+      data: {
+        task,
+      },
     });
   },
 );
 
 /**
- * @desc    Get a single task by ID
+ * @desc    Get all tasks for the user's household
+ * @route   GET /api/tasks
+ * @access  Private
+ */
+export const getAllTasks = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const householdId = req.householdId; // From JWT
+
+    const tasks = await Task.find({ householdId: householdId }).sort({
+      createdAt: -1,
+    });
+
+    res.status(200).json({
+      status: 'success',
+      results: tasks.length,
+      data: {
+        tasks,
+      },
+    });
+  },
+);
+
+/**
+ * @desc    Get a single task by its ID
  * @route   GET /api/tasks/:id
  * @access  Private
  */
-//
-// FIX: Reverted name back to 'getTask' as you requested
-//
-export const getTask = asyncHandler(
+export const getTaskById = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    const task = await Task.findById(req.params.id);
+    const taskId = req.params.id;
+    const householdId = req.householdId;
+
+    const task = await Task.findOne({ _id: taskId, householdId: householdId });
 
     if (!task) {
-      throw new AppError('No task found with that ID', 404);
+      throw new AppError('No task found with that ID in this household.', 404);
     }
-    
-    // --- MOBILE APP FIX (KEPT) ---
+
     res.status(200).json({
       status: 'success',
-      data: task, // <-- This is the fix for the mobile app
+      data: {
+        task,
+      },
     });
   },
 );
 
 /**
- * @desc    Update a task (e.g., details, assignment)
+ * @desc    Update a task (Parent only)
  * @route   PATCH /api/tasks/:id
  * @access  Private (Parent only)
  */
 export const updateTask = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { status, completedBy, approvedBy, ...updateData } = req.body;
+    const taskId = req.params.id;
+    const householdId = req.householdId;
 
-    const task = await Task.findByIdAndUpdate(req.params.id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    // Parents can update these fields
+    const { title, description, pointsValue, assignedTo, dueDate, status } =
+      req.body;
+
+    const task = await Task.findOneAndUpdate(
+      { _id: taskId, householdId: householdId },
+      { title, description, pointsValue, assignedTo, dueDate, status },
+      { new: true, runValidators: true },
+    );
 
     if (!task) {
-      throw new AppError('No task found with that ID', 404);
+      throw new AppError('No task found with that ID in this household.', 404);
     }
-    
-    // --- MOBILE APP FIX (KEPT) ---
+
     res.status(200).json({
       status: 'success',
-      data: task, // <-- This is the fix for the mobile app
+      data: {
+        task,
+      },
     });
   },
 );
 
 /**
- * @desc    Delete a task
+ * @desc    Delete a task (Parent only)
  * @route   DELETE /api/tasks/:id
  * @access  Private (Parent only)
  */
 export const deleteTask = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    const task = await Task.findByIdAndDelete(req.params.id);
+    const taskId = req.params.id;
+    const householdId = req.householdId;
+
+    const task = await Task.findOneAndDelete({
+      _id: taskId,
+      householdId: householdId,
+    });
 
     if (!task) {
-      throw new AppError('No task found with that ID', 404);
+      throw new AppError('No task found with that ID in this household.', 404);
     }
-    
+
     res.status(204).json({
       status: 'success',
       data: null,
@@ -147,91 +150,137 @@ export const deleteTask = asyncHandler(
   },
 );
 
-// --- TASK WORKFLOW METHODS ---
+// -----------------------------------------------------------------
+// --- NEW V4 TASK COMPLETION FLOW (STEP 3.3) ---
+// -----------------------------------------------------------------
 
 /**
- * @desc    Mark a task as completed by the assignee
- * @route   PATCH /api/tasks/:id/complete
- * @access  Private (Assigned user only)
+ * @desc    Mark a task as complete (for any member)
+ * @route   POST /api/tasks/:id/complete
+ * @access  Private
  */
 export const completeTask = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    const task = await Task.findById(req.params.id);
+    const taskId = req.params.id;
+    const householdId = req.householdId;
+    const loggedInUserId = req.user?._id as Types.ObjectId;
 
+    // 1. Find the household and the member's profile
+    const household = await Household.findById(householdId);
+    if (!household) {
+      throw new AppError('Household not found.', 404);
+    }
+
+    const memberProfile = household.memberProfiles.find((p) =>
+      p.familyMemberId.equals(loggedInUserId),
+    );
+    if (!memberProfile) {
+      throw new AppError('Your member profile was not found.', 404);
+    }
+
+    // 2. Find the task
+    const task = await Task.findOne({ _id: taskId, householdId: householdId });
     if (!task) {
-      throw new AppError('No task found with that ID', 404);
-    }
-    
-    if (task.status !== 'Pending') {
-        throw new AppError('Task is not pending and cannot be completed.', 400);
+      throw new AppError('Task not found.', 404);
     }
 
-    task.status = 'Completed';
-    task.completedBy = req.user?._id as Types.ObjectId;
-    task.completedAt = new Date();
+    // 3. Check if member is assigned to this task
+    // --- FIX #1 (Same as the one in approveTask) ---
+    // Use optional chaining 'p._id?.' because _id is optional
+    const isAssigned = task.assignedTo.some((assignedId) =>
+      assignedId.equals(memberProfile._id),
+    );
+    if (!isAssigned) {
+      throw new AppError('You are not assigned to this task.', 403);
+    }
+
+    // 4. Update the task status
+    task.status = 'PendingApproval'; // <-- This is the new v4 flow
+    task.completedBy = memberProfile._id; // Track who completed it
     await task.save();
 
     res.status(200).json({
       status: 'success',
-      data: task,
+      message: 'Task marked for approval.',
+      data: {
+        task,
+      },
     });
   },
 );
 
 /**
- * @desc    Approve a completed task
- * @route   PATCH /api/tasks/:id/approve
+ * @desc    Approve a completed task (Parent only)
+ * @route   POST /api/tasks/:id/approve
  * @access  Private (Parent only)
  */
 export const approveTask = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    const task = await Task.findById(req.params.id);
+    const taskId = req.params.id;
+    const householdId = req.householdId;
 
-    if (!task) {
-      throw new AppError('No task found with that ID', 404);
-    }
-
-    if (task.status !== 'Completed') {
-      throw new AppError('Task is not completed and cannot be approved.', 400);
-    }
-
-    task.status = 'Approved';
-    task.approvedBy = req.user?._id as Types.ObjectId;
-    task.approvedAt = new Date();
-    await task.save();
-    
-    res.status(200).json({
-      status: 'success',
-      data: task,
+    // 1. Find the task
+    const task = await Task.findOne({
+      _id: taskId,
+      householdId: householdId,
+      status: 'PendingApproval', // Can only approve tasks that are pending
     });
-  },
-);
-
-/**
- * @desc    Re-open a completed task (reject)
- * @route   PATCH /api/tasks/:id/reopen
- * @access  Private (Parent only)
- */
-export const reopenTask = asyncHandler(
-  async (req: AuthenticatedRequest, res: Response) => {
-    const task = await Task.findById(req.params.id);
 
     if (!task) {
-      throw new AppError('No task found with that ID', 404);
+      throw new AppError(
+        'Task not found or is not pending approval.',
+        404,
+      );
+    }
+    if (!task.completedBy) {
+      throw new AppError(
+        'Task cannot be approved: completedBy field is missing.',
+        400,
+      );
     }
 
-    if (task.status !== 'Completed') {
-      throw new AppError('Only completed tasks can be reopened.', 400);
+    // 2. Find the household to update points
+    const household = await Household.findById(householdId);
+    if (!household) {
+      throw new AppError('Household not found.', 404);
     }
 
-    task.status = 'Pending';
-    task.completedBy = undefined;
-    task.completedAt = undefined;
+    // 3. Find the member profile who completed the task
+    // --- FIX #1 ---
+    // Use optional chaining 'p._id?.' because _id is optional
+    const memberProfile = household.memberProfiles.find((p) =>
+      p._id?.equals(task.completedBy!),
+    );
+    // --- END OF FIX #1 ---
+
+    if (!memberProfile) {
+      throw new AppError(
+        'Member profile who completed task not found.',
+        404,
+      );
+    }
+
+    // 4. Atomically update the member's points and save the task status
+    
+    // --- FIX #2 ---
+    // Initialize pointsTotal with 0 if it's undefined
+    // before adding the new task points.
+    memberProfile.pointsTotal =
+      (memberProfile.pointsTotal || 0) + task.pointsValue;
+    // --- END OF FIX #2 ---
+    await household.save();
+
+    // Update task
+    task.status = 'Approved';
     await task.save();
 
     res.status(200).json({
       status: 'success',
-      data: task,
+      message: 'Task approved and points awarded.',
+      data: {
+        task,
+        updatedProfile: memberProfile,
+      },
     });
   },
 );

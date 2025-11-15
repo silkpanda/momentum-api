@@ -1,43 +1,41 @@
-// silkpanda/momentum-api/momentum-api-556c5b7b5d534751fdc505eedf6113f20a02cc98/src/routes/taskRoutes.ts
 import { Router } from 'express';
 import { protect } from '../middleware/authMiddleware';
 import { restrictTo } from '../controllers/authController';
 import {
   createTask,
   getAllTasks,
-  getTask,
+  getTaskById,
   updateTask,
   deleteTask,
+  completeTask, // <-- NEW IMPORT
+  approveTask, // <-- NEW IMPORT
 } from '../controllers/taskController';
-import { completeTask } from '../controllers/transactionController'; // <-- NEW IMPORT
 
-// Mandatory camelCase variable name for the Router instance
 const router = Router();
 
-// All routes after this middleware will be protected and restricted to 'Parent' role
-// Only Parents can manage (CRUD) the tasks themselves.
-router.use(protect, restrictTo('Parent'));
+// All routes are protected
+router.use(protect);
 
-// Routes for getting all tasks and creating a new task
-// GET /api/v1/tasks
-// POST /api/v1/tasks
-router.route('/')
-    .get(getAllTasks)
-    .post(createTask);
+// Get all tasks (for the household in the token)
+router.get('/', getAllTasks);
 
-// Routes for individual task operations
-// GET /api/v1/tasks/:id
-// PATCH /api/v1/tasks/:id
-// DELETE /api/v1/tasks/:id
-router.route('/:id')
-    .get(getTask)
-    .patch(updateTask)
-    .delete(deleteTask);
+// Parent-only routes
+router.post('/', restrictTo('Parent'), createTask);
 
-// NEW ROUTE: Task Completion (Phase 3.3)
-// POST /api/v1/tasks/:id/complete
-// This route is NOT restricted to Parent, only requires basic protection.
-router.route('/:id/complete') 
-    .post(protect, completeTask); 
+// --- NEW V4 COMPLETION ROUTES (STEP 3.3) ---
+
+// Any authenticated member can mark a task as complete
+router.post('/:id/complete', completeTask);
+
+// Only a Parent can approve a task
+router.post('/:id/approve', restrictTo('Parent'), approveTask);
+
+// --- END OF NEW ROUTES ---
+
+router
+  .route('/:id')
+  .get(getTaskById)
+  .patch(restrictTo('Parent'), updateTask)
+  .delete(restrictTo('Parent'), deleteTask);
 
 export default router;

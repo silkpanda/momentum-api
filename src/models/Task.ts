@@ -1,74 +1,99 @@
-// silkpanda/momentum-api/momentum-api-234e21f44dd55f086a321bc9901934f98b747c7a/src/models/Task.ts
+// src/models/Task.ts
 import { Schema, model, Document, Types } from 'mongoose';
-import { IHouseholdMemberProfile } from './Household'; // This is needed
 
-/**
- * Interface definition for a Task.
- *
- * --- THIS IS THE FIX ---
- * We remove `extends Document`. Mongoose will add the Document properties
- * automatically at compile time via the `model<ITask>` call.
- * This resolves the conflict that causes the 'status' property error.
- */
-export interface ITask {
-  householdId: Types.ObjectId;
+// --- THIS IS THE V4 REVISION (STEP 3.3) ---
+// The status enum is updated to support the new approval flow.
+// 'Pending' = To-do
+// 'PendingApproval' = Child has marked it done
+// 'Approved' = Parent has approved it and points are awarded
+// 'Rejected' = (Optional future state) Parent denies completion
+export type TaskStatus = 'Pending' | 'PendingApproval' | 'Approved';
+
+export interface ITask extends Document {
+  householdId: Types.ObjectId; // Link to the household context
   title: string;
   description?: string;
-  assignedTo: IHouseholdMemberProfile['_id']; // Ref to sub-doc ID
-  points: number;
-  status: 'Pending' | 'Completed' | 'Approved';
-  schedule?: {
-    type: 'Daily' | 'Weekly' | 'Once';
-    // Additional fields as needed, e.g., dayOfWeek for Weekly
-  };
-  createdBy: Types.ObjectId; // Ref to FamilyMember
-  completedBy?: Types.ObjectId; // Ref to FamilyMember
-  completedAt?: Date;
-  approvedBy?: Types.ObjectId; // Ref to FamilyMember
-  approvedAt?: Date;
+  pointsValue: number;
+  
+  // --- UPDATED ---
+  status: TaskStatus;
+  
+  // Array of member profile sub-document IDs
+  // This is who the task is ASSIGNED to
+  assignedTo: Types.ObjectId[]; 
+  
+  // The specific member profile ID who completed the task
+  completedBy?: Types.ObjectId; 
+  
+  dueDate?: Date;
+  isRecurring: boolean;
+  recurrenceInterval?: 'daily' | 'weekly' | 'monthly';
+  
+  // Governance: Must be camelCase
+  createdAt: Date;
+  updatedAt: Date;
 }
 
-// Schema definition
-const taskSchema = new Schema<ITask>(
+const TaskSchema = new Schema<ITask>(
   {
     householdId: {
       type: Schema.Types.ObjectId,
       ref: 'Household',
       required: true,
+      index: true, // Good for performance
     },
-    title: { type: String, required: true },
-    description: { type: String },
-    assignedTo: {
-      type: Schema.Types.ObjectId, // This is IHouseholdMemberProfile['_id']
-      required: true,
+    title: {
+      type: String,
+      required: [true, 'Task title is required'],
+      trim: true,
     },
-    points: { type: Number, required: true, min: 0 },
+    description: {
+      type: String,
+      trim: true,
+    },
+    pointsValue: {
+      type: Number,
+      required: [true, 'Points value is required'],
+      min: 0,
+    },
+    
+    // --- THIS IS THE UPDATED FIELD ---
     status: {
       type: String,
-      enum: ['Pending', 'Completed', 'Approved'],
+      enum: ['Pending', 'PendingApproval', 'Approved'], // v4 Status Flow
       default: 'Pending',
       required: true,
     },
-    schedule: {
-      type: { type: String, enum: ['Daily', 'Weekly', 'Once'] },
-    },
-    createdBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'FamilyMember',
-      required: true,
-    },
+    // --- END OF UPDATE ---
+    
+    assignedTo: [
+      {
+        type: Schema.Types.ObjectId, // Refers to the Household.memberProfiles._id
+        required: true,
+      },
+    ],
     completedBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'FamilyMember',
+      type: Schema.Types.ObjectId, // Refers to the Household.memberProfiles._id
     },
-    completedAt: { type: Date },
-    approvedBy: {
-      type: Schema.Types.ObjectId,
-      ref: 'FamilyMember',
+    dueDate: {
+      type: Date,
     },
-    approvedAt: { type: Date },
+    isRecurring: {
+      type: Boolean,
+      default: false,
+    },
+    recurrenceInterval: {
+      type: String,
+      enum: ['daily', 'weekly', 'monthly'],
+    },
   },
-  { timestamps: true }, // Adds createdAt and updatedAt
+  {
+    timestamps: true, // Manages createdAt and updatedAt
+    collection: 'tasks', // Governance: lowercase_plural
+  },
 );
 
-export default model<ITask>('Task', taskSchema);
+// Mandatory PascalCase Model name
+const Task = model<ITask>('Task', TaskSchema);
+
+export default Task;
