@@ -7,34 +7,29 @@ import {
   getTaskById,
   updateTask,
   deleteTask,
-  completeTask, // <-- NEW IMPORT
-  approveTask, // <-- NEW IMPORT
+  completeTask,
+  approveTask,
 } from '../controllers/taskController';
 
 const router = Router();
 
-// All routes are protected
+// 1. All routes require login
 router.use(protect);
 
-// Get all tasks (for the household in the token)
-router.get('/', getAllTasks);
+// 2. Public Routes (Parent & Child)
+// Everyone needs to see tasks to know what to do!
+router.route('/')
+  .get(getAllTasks) 
+  .post(restrictTo('Parent'), createTask); // Only Parents create tasks
 
-// Parent-only routes
-router.post('/', restrictTo('Parent'), createTask);
+router.post('/:id/complete', completeTask); // Anyone can complete
 
-// --- NEW V4 COMPLETION ROUTES (STEP 3.3) ---
-
-// Any authenticated member can mark a task as complete
-router.post('/:id/complete', completeTask);
-
-// Only a Parent can approve a task
+// 3. Restricted Routes (Parent Only)
 router.post('/:id/approve', restrictTo('Parent'), approveTask);
-
-// --- END OF NEW ROUTES ---
 
 router
   .route('/:id')
-  .get(getTaskById)
+  .get(getTaskById) // Anyone can view details
   .patch(restrictTo('Parent'), updateTask)
   .delete(restrictTo('Parent'), deleteTask);
 

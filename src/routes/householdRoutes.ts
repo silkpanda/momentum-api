@@ -4,6 +4,9 @@ import { protect } from '../middleware/authMiddleware';
 import {
   createHousehold,
   getMyHouseholds,
+  getHousehold,       // <-- NEW IMPORT
+  updateHousehold,    // <-- NEW IMPORT
+  deleteHousehold,    // <-- NEW IMPORT
   addMemberToHousehold,
   updateMemberProfile,
   removeMemberFromHousehold,
@@ -15,43 +18,43 @@ const router = express.Router();
 router.use(protect);
 
 // -----------------------------------------------------------
-// A. Core Household Routes (GET / POST)
+// A. Core Household Routes
 // -----------------------------------------------------------
 
 // @route   POST /api/households
-// @desc    Create a new household (and adds the user as the first Parent member)
-// @access  Private
+// @desc    Create a new household
 router.route('/').post(createHousehold);
 
 // @route   GET /api/households
-// @desc    Get all households the logged-in user is a member of (for co-parenting support)
-// @access  Private
+// @desc    Get all households the logged-in user is a member of
 router.route('/').get(getMyHouseholds);
 
+// @route   GET /api/households/:id
+// @desc    Get, Update, or Delete a specific household by ID
+// @access  Private
+router.route('/:id')
+  .get(getHousehold)
+  .patch(updateHousehold)
+  .delete(deleteHousehold);
 
 // -----------------------------------------------------------
 // B. Household Member Management Routes
 // -----------------------------------------------------------
-// These routes implement the new "Unified Membership Model" CRUD API
-// The routes are nested under /households/:householdId as requested by the blueprint
 
 // @route   POST /api/households/:householdId/members
 // @desc    Add a new member to the household (Parent or Child)
-// @access  Private (Parent role only, enforced in controller)
 router
   .route('/:householdId/members')
   .post(addMemberToHousehold);
 
 // @route   PATCH /api/households/:householdId/members/:memberProfileId
-// @desc    Update a member's profile (displayName, color, role) within the household
-// @access  Private (Parent role only, enforced in controller)
+// @desc    Update a member's profile (displayName, color, role)
 router
   .route('/:householdId/members/:memberProfileId')
   .patch(updateMemberProfile);
 
 // @route   DELETE /api/households/:householdId/members/:memberProfileId
 // @desc    Remove a member from the household
-// @access  Private (Parent role only, enforced in controller)
 router
   .route('/:householdId/members/:memberProfileId')
   .delete(removeMemberFromHousehold);

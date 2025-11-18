@@ -1,4 +1,4 @@
-// silkpanda/momentum-api/momentum-api-9cd056749dbc80f839350d7a816204f38ee8171d/src/server.ts
+// silkpanda/momentum-api/momentum-api-8b94e0d79442b81f45f33d74e43f2675eb08824c/src/server.ts
 import express from 'express';
 import mongoose from 'mongoose';
 import { ServerApiVersion } from 'mongodb'; 
@@ -60,16 +60,26 @@ const app = express();
 app.use(cors()); // Allow cross-origin requests
 app.use(express.json()); // Parse JSON bodies
 
+// --- DEBUG LOGGER ---
+// This will print exactly what the Core API receives from the BFF
+app.use((req, res, next) => {
+  console.log(`[Core API] Incoming Request: ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // 4. API Routes
 // Register Auth routes first
 app.use('/api/v1/auth', authRouter);
+
 // NEW ROUTE REGISTRATION: Register Household routes
+// FIX: Double-mount to support both Singular (from BFF?) and Plural (Standard)
 app.use('/api/v1/households', householdRouter);
+app.use('/api/v1/household', householdRouter); // Safety Alias
+
 // NEW ROUTE REGISTRATION: Register Task routes
 app.use('/api/v1/tasks', taskRouter);
 // NEW ROUTE REGISTRATION: Register Store Item routes
 app.use('/api/v1/store-items', storeItemRouter);
-// REMOVED: app.use('/api/v1/transactions', transactionRouter);
 
 
 // Basic Health Check Route

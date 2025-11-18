@@ -1,11 +1,13 @@
-// silkpanda/momentum-api/momentum-api-234e21f44dd55f086a321bc9901934f98b747c7a/src/controllers/householdController.ts
+// src/controllers/householdController.ts
 import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
+import mongoose, { Types } from 'mongoose'; // Import mongoose for CastError check
 import Household, { IHouseholdMemberProfile } from '../models/Household';
 import FamilyMember from '../models/FamilyMember';
-import { AuthenticatedRequest } from '../middleware/authMiddleware'; 
-import AppError from '../utils/AppError'; 
-import { Types } from 'mongoose';
+import Task from '../models/Task'; // Required for cleanup
+import StoreItem from '../models/StoreItem'; // Required for cleanup
+import { AuthenticatedRequest } from '../middleware/authMiddleware';
+import AppError from '../utils/AppError';
 
 /**
  * @desc    Create a new household
@@ -16,8 +18,7 @@ export const createHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { householdName, userDisplayName, userProfileColor } = req.body;
 
-    // FIX: Assert the type of _id to Types.ObjectId
-    const creatorFamilyMemberId = req.user?._id as Types.ObjectId; 
+    const creatorFamilyMemberId = req.user?._id as Types.ObjectId;
 
     if (!creatorFamilyMemberId) {
       throw new AppError('Authentication error. User not found.', 401);
@@ -30,19 +31,17 @@ export const createHousehold = asyncHandler(
       );
     }
 
-    // Create the profile for the creator
     const creatorProfile: IHouseholdMemberProfile = {
-      familyMemberId: creatorFamilyMemberId, // Now correctly typed
+      familyMemberId: creatorFamilyMemberId,
       displayName: userDisplayName,
       profileColor: userProfileColor,
-      role: 'Parent', // The creator is always a Parent
+      role: 'Parent',
       pointsTotal: 0,
     };
 
-    // Create the new household document
     const household = await Household.create({
       householdName,
-      memberProfiles: [creatorProfile], 
+      memberProfiles: [creatorProfile],
     });
 
     res.status(201).json(household);
@@ -50,39 +49,164 @@ export const createHousehold = asyncHandler(
 );
 
 /**
- * @desc    Get the primary household for the current user's session context (from JWT)
+ * @desc    Get the primary household for the current user's session context
  * @route   GET /api/households
  * @access  Private
  */
 export const getMyHouseholds = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    // CRITICAL FIX: Use the householdId from the JWT payload for the session context
-    const householdId = req.householdId; 
+    const householdId = req.householdId;
 
     if (!householdId) {
       throw new AppError('Household context not found in session token.', 401);
     }
 
-    // 1. Find the single household using the ID from the token
-    const household = await Household.findById(householdId)
-      // Populate the nested memberProfiles.familyMemberId to get user details
-      .populate({
-        path: 'memberProfiles.familyMemberId',
-        select: 'firstName email', // Only select necessary fields
-      });
+    const household = await Household.findById(householdId).populate({
+      path: 'memberProfiles.familyMemberId',
+      select: 'firstName email',
+    });
 
     if (!household) {
       throw new AppError('Primary household not found.', 404);
     }
 
-    //
-    // --- THIS IS THE CRITICAL CHANGE ---
-    // We are no longer "double wrapping" the household object.
-    // The mobile app's fetcher expects the household data directly.
-    //
     res.status(200).json({
       status: 'success',
-      data: household, // <-- WAS: { household: household }
+      data: household,
+    });
+  },
+);
+
+/**
+ * @desc    Get a single household by ID
+ * @route   GET /api/households/:id
+ * @access  Private
+ */
+export const getHousehold = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    
+    const userId = req.user?._id as Types.ObjectId;
+    if (!userId) {
+         throw new AppError('Authentication error. User not found.', 401);
+    }
+    
+    // Fetch and populate (transforms familyMemberId into an Object)
+    const household = await Household.findById(id).populate({
+      path: 'memberProfiles.familyMemberId',
+      select: 'firstName email',
+    });
+
+    if (!household) {
+      throw new AppError('Household not found.', 404);
+    }
+
+    // FIX: Handle the populated object correctly
+    const isMember = household.memberProfiles.some((p) => {
+        // Because we populated, familyMemberId is now an object (IFamilyMember)
+        // We cast to 'any' to access _id safely without TS complaining about the union type
+        const memberDoc = p.familyMemberId as any;
+        
+        // Check if it has an _id (populated) or is just an ID (unpopulated fallback)
+        const memberId = memberDoc._id || memberDoc;
+        
+        return memberId.toString() === userId.toString();
+    });
+
+    if (!isMember) {
+        throw new AppError('You are not a member of this household.', 403);
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: household,
+    });
+  },
+);
+
+/**
+ * @desc    Update a household (e.g., rename)
+ * @route   PATCH /api/households/:id
+ * @access  Private (Parent only)
+ */
+export const updateHousehold = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const { householdName } = req.body;
+    
+    const userId = req.user?._id as Types.ObjectId;
+    if (!userId) {
+         throw new AppError('Authentication error. User not found.', 401);
+    }
+
+    if (!householdName) {
+        throw new AppError('householdName is required for update.', 400);
+    }
+
+    // Note: No populate here, so familyMemberId remains an ObjectId
+    const household = await Household.findById(id);
+
+    if (!household) {
+      throw new AppError('Household not found.', 404);
+    }
+
+    // Authorization: Only a Parent of THIS household can update it
+    const memberProfile = household.memberProfiles.find(
+        (p) => p.familyMemberId.toString() === userId.toString()
+    );
+
+    if (!memberProfile || memberProfile.role !== 'Parent') {
+        throw new AppError('Unauthorized. Only Parents can update household details.', 403);
+    }
+
+    household.householdName = householdName;
+    await household.save();
+
+    res.status(200).json({
+      status: 'success',
+      data: household,
+    });
+  },
+);
+
+/**
+ * @desc    Delete a household
+ * @route   DELETE /api/households/:id
+ * @access  Private (Parent only)
+ */
+export const deleteHousehold = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    
+    const userId = req.user?._id as Types.ObjectId;
+    if (!userId) {
+         throw new AppError('Authentication error. User not found.', 401);
+    }
+
+    const household = await Household.findById(id);
+
+    if (!household) {
+      throw new AppError('Household not found.', 404);
+    }
+
+    // Authorization: Only a Parent of THIS household can delete it
+    const memberProfile = household.memberProfiles.find(
+        (p) => p.familyMemberId.toString() === userId.toString()
+    );
+
+    if (!memberProfile || memberProfile.role !== 'Parent') {
+        throw new AppError('Unauthorized. Only Parents can delete a household.', 403);
+    }
+
+    // Cascade Delete: Clean up related data
+    await Task.deleteMany({ householdRefId: id });
+    await StoreItem.deleteMany({ householdRefId: id });
+    
+    await Household.findByIdAndDelete(id);
+
+    res.status(204).json({
+      status: 'success',
+      data: null,
     });
   },
 );
@@ -96,35 +220,38 @@ export const addMemberToHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { householdId } = req.params;
     let { familyMemberId, firstName, displayName, profileColor, role } = req.body;
-    
-    const loggedInUserId = req.user?._id as Types.ObjectId; 
+
+    const loggedInUserId = req.user?._id as Types.ObjectId;
 
     if (!loggedInUserId) {
-        throw new AppError('Authentication error. User not found.', 401);
+      throw new AppError('Authentication error. User not found.', 401);
     }
 
     if (!displayName || !profileColor || !role) {
-        if (!familyMemberId && (!firstName || !role)) {
-            throw new AppError(
-                'Missing required fields: displayName, profileColor, and role are required. For new members, firstName is also required.',
-                400,
-            );
-        }
+      if (!familyMemberId && (!firstName || !role)) {
+        throw new AppError(
+          'Missing required fields: displayName, profileColor, and role are required. For new members, firstName is also required.',
+          400,
+        );
+      }
     }
-    
-    if (!familyMemberId) {
-        if (role !== 'Child') {
-            throw new AppError('Only the "Child" role can be created through this endpoint without a familyMemberId.', 400);
-        }
-        
-        const newChild = await FamilyMember.create({
-            firstName,
-            lastName: 'Household', 
-            email: `${firstName.toLowerCase().replace(/\s/g, '')}-child-${new Date().getTime()}@momentum.com`, 
-            password: `temp-${Math.random()}`, 
-        });
 
-        familyMemberId = newChild._id;
+    if (!familyMemberId) {
+      if (role !== 'Child') {
+        throw new AppError(
+          'Only the "Child" role can be created through this endpoint without a familyMemberId.',
+          400,
+        );
+      }
+
+      const newChild = await FamilyMember.create({
+        firstName,
+        lastName: 'Household',
+        email: `${firstName.toLowerCase().replace(/\s/g, '')}-child-${new Date().getTime()}@momentum.com`,
+        password: `temp-${Math.random()}`,
+      });
+
+      familyMemberId = newChild._id;
     }
 
     const household = await Household.findById(householdId);
@@ -135,7 +262,8 @@ export const addMemberToHousehold = asyncHandler(
 
     const isParent = household.memberProfiles.some(
       (member) =>
-        member.familyMemberId.equals(loggedInUserId) && member.role === 'Parent',
+        member.familyMemberId.equals(loggedInUserId) &&
+        member.role === 'Parent',
     );
 
     if (!isParent) {
@@ -162,7 +290,7 @@ export const addMemberToHousehold = asyncHandler(
     }
 
     const newMemberProfile: IHouseholdMemberProfile = {
-      familyMemberId: new Types.ObjectId(familyMemberId), 
+      familyMemberId: new Types.ObjectId(familyMemberId),
       displayName: displayName || memberExists.firstName,
       profileColor: profileColor!,
       role: role as 'Parent' | 'Child',
@@ -173,19 +301,19 @@ export const addMemberToHousehold = asyncHandler(
     const updatedHousehold = await household.save();
 
     const finalHousehold = await updatedHousehold.populate({
-        path: 'memberProfiles.familyMemberId',
-        select: 'firstName email',
+      path: 'memberProfiles.familyMemberId',
+      select: 'firstName email',
     });
 
     res.status(201).json({
-        status: 'success',
-        message: 'Member added to household successfully.',
-        data: {
-            household: finalHousehold,
-            profile: finalHousehold.memberProfiles.find(
-                p => p.familyMemberId.equals(familyMemberId)
-            )
-        },
+      status: 'success',
+      message: 'Member added to household successfully.',
+      data: {
+        household: finalHousehold,
+        profile: finalHousehold.memberProfiles.find((p) =>
+          p.familyMemberId.equals(familyMemberId),
+        ),
+      },
     });
   },
 );
@@ -199,11 +327,11 @@ export const updateMemberProfile = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { householdId, memberProfileId } = req.params;
     const { displayName, profileColor, role } = req.body;
-    
-    const loggedInUserId = req.user?._id as Types.ObjectId; 
+
+    const loggedInUserId = req.user?._id as Types.ObjectId;
 
     if (!loggedInUserId) {
-        throw new AppError('Authentication error. User not found.', 401);
+      throw new AppError('Authentication error. User not found.', 401);
     }
 
     const household = await Household.findById(householdId);
@@ -214,7 +342,8 @@ export const updateMemberProfile = asyncHandler(
 
     const isParent = household.memberProfiles.some(
       (member) =>
-        member.familyMemberId.equals(loggedInUserId) && member.role === 'Parent',
+        member.familyMemberId.equals(loggedInUserId) &&
+        member.role === 'Parent',
     );
 
     if (!isParent) {
@@ -224,8 +353,8 @@ export const updateMemberProfile = asyncHandler(
       );
     }
 
-    const memberProfile = household.memberProfiles.find(
-      (member) => member._id!.equals(memberProfileId),
+    const memberProfile = household.memberProfiles.find((member) =>
+      member._id!.equals(memberProfileId),
     );
 
     if (!memberProfile) {
@@ -250,11 +379,11 @@ export const updateMemberProfile = asyncHandler(
 export const removeMemberFromHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { householdId, memberProfileId } = req.params;
-    
-    const loggedInUserId = req.user?._id as Types.ObjectId; 
+
+    const loggedInUserId = req.user?._id as Types.ObjectId;
 
     if (!loggedInUserId) {
-        throw new AppError('Authentication error. User not found.', 401);
+      throw new AppError('Authentication error. User not found.', 401);
     }
 
     const household = await Household.findById(householdId);
@@ -265,7 +394,8 @@ export const removeMemberFromHousehold = asyncHandler(
 
     const isParent = household.memberProfiles.some(
       (member) =>
-        member.familyMemberId.equals(loggedInUserId) && member.role === 'Parent',
+        member.familyMemberId.equals(loggedInUserId) &&
+        member.role === 'Parent',
     );
 
     if (!isParent) {
@@ -274,18 +404,18 @@ export const removeMemberFromHousehold = asyncHandler(
         403,
       );
     }
-    
-    const memberToRemove = household.memberProfiles.find(
-      (member) => member._id!.equals(memberProfileId)
+
+    const memberToRemove = household.memberProfiles.find((member) =>
+      member._id!.equals(memberProfileId),
     );
 
     if (!memberToRemove) {
       throw new AppError('Member profile not found in this household.', 404);
     }
-    
+
     if (memberToRemove.role === 'Parent') {
       const parentCount = household.memberProfiles.filter(
-        (m) => m.role === 'Parent'
+        (m) => m.role === 'Parent',
       ).length;
       if (parentCount <= 1) {
         throw new AppError(
@@ -296,7 +426,7 @@ export const removeMemberFromHousehold = asyncHandler(
     }
 
     household.memberProfiles = household.memberProfiles.filter(
-      (member) => !member._id!.equals(memberProfileId)
+      (member) => !member._id!.equals(memberProfileId),
     );
 
     await household.save();
