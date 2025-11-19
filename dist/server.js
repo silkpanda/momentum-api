@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-// silkpanda/momentum-api/momentum-api-556c5b7b5d534751fdc505eedf6113f20a02cc98/src/server.ts
+// silkpanda/momentum-api/momentum-api-8b94e0d79442b81f45f33d74e43f2675eb08824c/src/server.ts
 const express_1 = __importDefault(require("express"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const mongodb_1 = require("mongodb");
@@ -51,6 +51,10 @@ const taskRoutes_1 = __importDefault(require("./routes/taskRoutes"));
 // NEW ADDITION: Import the store item router
 const storeItemRoutes_1 = __importDefault(require("./routes/storeItemRoutes"));
 // REMOVED: import transactionRouter from './routes/transactionRoutes';
+// NEW IMPORTS FOR ERROR HANDLING
+const AppError_1 = __importDefault(require("./utils/AppError"));
+// FIX APPLIED: Changed to named import for globalErrorHandler
+const errorHandler_1 = require("./utils/errorHandler");
 // 1. Load Environment Variables
 dotenv.config();
 // Mandatory governance check: Ensure critical environment variables are set
@@ -84,20 +88,36 @@ const app = (0, express_1.default)();
 // Middleware
 app.use((0, cors_1.default)()); // Allow cross-origin requests
 app.use(express_1.default.json()); // Parse JSON bodies
+// --- DEBUG LOGGER ---
+// This will print exactly what the Core API receives from the BFF
+app.use((req, res, next) => {
+    console.log(`[Core API] Incoming Request: ${req.method} ${req.originalUrl}`);
+    next();
+});
 // 4. API Routes
 // Register Auth routes first
 app.use('/api/v1/auth', authRoutes_1.default);
 // NEW ROUTE REGISTRATION: Register Household routes
+// FIX: Double-mount to support both Singular (from BFF?) and Plural (Standard)
 app.use('/api/v1/households', householdRoutes_1.default);
+app.use('/api/v1/household', householdRoutes_1.default); // Safety Alias
 // NEW ROUTE REGISTRATION: Register Task routes
 app.use('/api/v1/tasks', taskRoutes_1.default);
 // NEW ROUTE REGISTRATION: Register Store Item routes
 app.use('/api/v1/store-items', storeItemRoutes_1.default);
-// REMOVED: app.use('/api/v1/transactions', transactionRouter);
 // Basic Health Check Route
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'API is running', environment: process.env.NODE_ENV });
 });
+// 4b. UNHANDLED ROUTE HANDLER
+// Catch all for routes not defined by the application
+app.all('*', (req, res, next) => {
+    // Use the AppError utility to create an operational error
+    next(new AppError_1.default(`Can't find ${req.originalUrl} on this server!`, 404));
+});
+// 4c. GLOBAL ERROR HANDLER
+// This middleware runs whenever next(err) is called with an error object
+app.use(errorHandler_1.globalErrorHandler);
 // 5. Start Server
 const startServer = async () => {
     await connectDB();

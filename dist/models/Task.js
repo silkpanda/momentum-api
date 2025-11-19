@@ -1,11 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// src/models/Task.ts
 const mongoose_1 = require("mongoose");
-// Schema definition
 const TaskSchema = new mongoose_1.Schema({
-    taskName: {
-        type: String,
+    householdId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'Household',
         required: true,
+        index: true, // Good for performance
+    },
+    title: {
+        type: String,
+        required: [true, 'Task title is required'],
         trim: true,
     },
     description: {
@@ -14,36 +20,40 @@ const TaskSchema = new mongoose_1.Schema({
     },
     pointsValue: {
         type: Number,
-        required: true,
-        min: 1, // Tasks must give at least 1 point
+        required: [true, 'Points value is required'],
+        min: 0,
     },
-    recurrence: {
+    // --- THIS IS THE UPDATED FIELD ---
+    status: {
         type: String,
-        enum: ['None', 'Daily', 'Weekly'],
-        default: 'None',
-    },
-    assignedToRefs: {
-        type: [
-            {
-                type: mongoose_1.Schema.Types.ObjectId,
-                ref: 'FamilyMember',
-            },
-        ],
-        default: [],
-        // Using 'assignedToRefs' adheres to the 'camelCase + Ref/Id' naming for array references
-    },
-    householdRefId: {
-        type: mongoose_1.Schema.Types.ObjectId,
-        ref: 'Household',
+        enum: ['Pending', 'PendingApproval', 'Approved'], // v4 Status Flow
+        default: 'Pending',
         required: true,
     },
-    isCompleted: {
+    // --- END OF UPDATE ---
+    assignedTo: [
+        {
+            type: mongoose_1.Schema.Types.ObjectId, // Refers to the Household.memberProfiles._id
+            required: true,
+        },
+    ],
+    completedBy: {
+        type: mongoose_1.Schema.Types.ObjectId, // Refers to the Household.memberProfiles._id
+    },
+    dueDate: {
+        type: Date,
+    },
+    isRecurring: {
         type: Boolean,
         default: false,
     },
+    recurrenceInterval: {
+        type: String,
+        enum: ['daily', 'weekly', 'monthly'],
+    },
 }, {
-    timestamps: true,
-    collection: 'tasks', // Mandatory lowercase_plural collection name
+    timestamps: true, // Manages createdAt and updatedAt
+    collection: 'tasks', // Governance: lowercase_plural
 });
 // Mandatory PascalCase Model name
 const Task = (0, mongoose_1.model)('Task', TaskSchema);
