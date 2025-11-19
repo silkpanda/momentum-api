@@ -6,6 +6,7 @@ import Task from '../models/Task';
 import Household from '../models/Household';
 import AppError from '../utils/AppError';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
+import { io } from '../server'; // Import Socket.io instance
 
 /**
  * @desc    Create a new task
@@ -33,6 +34,9 @@ export const createTask = asyncHandler(
       dueDate,
       status: 'Pending', // Default status
     });
+
+    // Emit real-time update
+    io.emit('task_updated', { type: 'create', task });
 
     res.status(201).json({
       status: 'success',
@@ -118,6 +122,9 @@ export const updateTask = asyncHandler(
       throw new AppError('No task found with that ID in this household.', 404);
     }
 
+    // Emit real-time update
+    io.emit('task_updated', { type: 'update', task });
+
     res.status(200).json({
       status: 'success',
       data: {
@@ -145,6 +152,9 @@ export const deleteTask = asyncHandler(
     if (!task) {
       throw new AppError('No task found with that ID in this household.', 404);
     }
+
+    // Emit real-time update
+    io.emit('task_updated', { type: 'delete', taskId });
 
     res.status(204).json({
       status: 'success',
@@ -218,6 +228,9 @@ export const completeTask = asyncHandler(
     task.completedBy = memberProfile!._id as Types.ObjectId; // Track who completed it
     await task.save();
 
+    // Emit real-time update
+    io.emit('task_updated', { type: 'update', task });
+
     res.status(200).json({
       status: 'success',
       message: 'Task marked for approval.',
@@ -283,6 +296,16 @@ export const approveTask = asyncHandler(
     // Update task status
     task.status = 'Approved';
     await task.save();
+
+    // Emit real-time update with member points
+    io.emit('task_updated', {
+      type: 'update',
+      task,
+      memberUpdate: {
+        memberId: memberProfile._id,
+        pointsTotal: memberProfile.pointsTotal
+      }
+    });
 
     res.status(200).json({
       status: 'success',

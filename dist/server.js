@@ -36,12 +36,15 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.io = void 0;
 // silkpanda/momentum-api/momentum-api-8b94e0d79442b81f45f33d74e43f2675eb08824c/src/server.ts
 const express_1 = __importDefault(require("express"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const mongodb_1 = require("mongodb");
 const cors_1 = __importDefault(require("cors"));
 const dotenv = __importStar(require("dotenv"));
+const http_1 = require("http");
+const socket_io_1 = require("socket.io");
 // CRITICAL ADDITION: Import the authentication router
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 // NEW ADDITION: Import the household router
@@ -50,7 +53,6 @@ const householdRoutes_1 = __importDefault(require("./routes/householdRoutes"));
 const taskRoutes_1 = __importDefault(require("./routes/taskRoutes"));
 // NEW ADDITION: Import the store item router
 const storeItemRoutes_1 = __importDefault(require("./routes/storeItemRoutes"));
-// REMOVED: import transactionRouter from './routes/transactionRoutes';
 // NEW IMPORTS FOR ERROR HANDLING
 const AppError_1 = __importDefault(require("./utils/AppError"));
 // FIX APPLIED: Changed to named import for globalErrorHandler
@@ -85,6 +87,19 @@ const connectDB = async () => {
 };
 // 3. Express App Setup (Must be camelCase: app)
 const app = (0, express_1.default)();
+const httpServer = (0, http_1.createServer)(app);
+exports.io = new socket_io_1.Server(httpServer, {
+    cors: {
+        origin: "*", // Allow all origins for now (BFF, Mobile, etc.)
+        methods: ["GET", "POST"]
+    }
+});
+exports.io.on('connection', (socket) => {
+    console.log('A user connected:', socket.id);
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+    });
+});
 // Middleware
 app.use((0, cors_1.default)()); // Allow cross-origin requests
 app.use(express_1.default.json()); // Parse JSON bodies
@@ -121,7 +136,8 @@ app.use(errorHandler_1.globalErrorHandler);
 // 5. Start Server
 const startServer = async () => {
     await connectDB();
-    app.listen(PORT, () => {
+    // Use httpServer.listen instead of app.listen
+    httpServer.listen(PORT, () => {
         console.log(`Server is running on port ${PORT}`);
     });
 };

@@ -8,6 +8,7 @@ const express_async_handler_1 = __importDefault(require("express-async-handler")
 const Task_1 = __importDefault(require("../models/Task"));
 const Household_1 = __importDefault(require("../models/Household"));
 const AppError_1 = __importDefault(require("../utils/AppError"));
+const server_1 = require("../server"); // Import Socket.io instance
 /**
  * @desc    Create a new task
  * @route   POST /api/tasks
@@ -28,6 +29,8 @@ exports.createTask = (0, express_async_handler_1.default)(async (req, res) => {
         dueDate,
         status: 'Pending', // Default status
     });
+    // Emit real-time update
+    server_1.io.emit('task_updated', { type: 'create', task });
     res.status(201).json({
         status: 'success',
         data: {
@@ -89,6 +92,8 @@ exports.updateTask = (0, express_async_handler_1.default)(async (req, res) => {
     if (!task) {
         throw new AppError_1.default('No task found with that ID in this household.', 404);
     }
+    // Emit real-time update
+    server_1.io.emit('task_updated', { type: 'update', task });
     res.status(200).json({
         status: 'success',
         data: {
@@ -111,6 +116,8 @@ exports.deleteTask = (0, express_async_handler_1.default)(async (req, res) => {
     if (!task) {
         throw new AppError_1.default('No task found with that ID in this household.', 404);
     }
+    // Emit real-time update
+    server_1.io.emit('task_updated', { type: 'delete', taskId });
     res.status(204).json({
         status: 'success',
         data: null,
@@ -166,6 +173,8 @@ exports.completeTask = (0, express_async_handler_1.default)(async (req, res) => 
     task.status = 'PendingApproval';
     task.completedBy = memberProfile._id; // Track who completed it
     await task.save();
+    // Emit real-time update
+    server_1.io.emit('task_updated', { type: 'update', task });
     res.status(200).json({
         status: 'success',
         message: 'Task marked for approval.',
@@ -210,6 +219,15 @@ exports.approveTask = (0, express_async_handler_1.default)(async (req, res) => {
     // Update task status
     task.status = 'Approved';
     await task.save();
+    // Emit real-time update with member points
+    server_1.io.emit('task_updated', {
+        type: 'update',
+        task,
+        memberUpdate: {
+            memberId: memberProfile._id,
+            pointsTotal: memberProfile.pointsTotal
+        }
+    });
     res.status(200).json({
         status: 'success',
         message: 'Task approved and points awarded.',

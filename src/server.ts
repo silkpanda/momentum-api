@@ -1,23 +1,25 @@
 // silkpanda/momentum-api/momentum-api-8b94e0d79442b81f45f33d74e43f2675eb08824c/src/server.ts
 import express from 'express';
 import mongoose from 'mongoose';
-import { ServerApiVersion } from 'mongodb'; 
+import { ServerApiVersion } from 'mongodb';
 import cors from 'cors';
 import * as dotenv from 'dotenv';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+
 // CRITICAL ADDITION: Import the authentication router
-import authRouter from './routes/authRoutes'; 
+import authRouter from './routes/authRoutes';
 // NEW ADDITION: Import the household router
-import householdRouter from './routes/householdRoutes'; 
+import householdRouter from './routes/householdRoutes';
 // NEW ADDITION: Import the task router
 import taskRouter from './routes/taskRoutes';
 // NEW ADDITION: Import the store item router
 import storeItemRouter from './routes/storeItemRoutes';
-// REMOVED: import transactionRouter from './routes/transactionRoutes';
 
 // NEW IMPORTS FOR ERROR HANDLING
 import AppError from './utils/AppError';
 // FIX APPLIED: Changed to named import for globalErrorHandler
-import { globalErrorHandler } from './utils/errorHandler'; 
+import { globalErrorHandler } from './utils/errorHandler';
 
 // 1. Load Environment Variables
 dotenv.config();
@@ -39,7 +41,7 @@ const connectDB = async () => {
     // MANDATORY: Stable API Configuration (Phase 1.2)
     await mongoose.connect(MONGO_URI, {
       serverApi: {
-        version: ServerApiVersion.v1, 
+        version: ServerApiVersion.v1,
         strict: true,
         deprecationErrors: true,
       },
@@ -49,12 +51,28 @@ const connectDB = async () => {
   } catch (error) {
     console.error('MongoDB connection failed:', error);
     // Exit process on failure
-    process.exit(1); 
+    process.exit(1);
   }
 };
 
 // 3. Express App Setup (Must be camelCase: app)
 const app = express();
+const httpServer = createServer(app);
+
+export const io = new Server(httpServer, {
+  cors: {
+    origin: "*", // Allow all origins for now (BFF, Mobile, etc.)
+    methods: ["GET", "POST"]
+  }
+});
+
+io.on('connection', (socket: any) => {
+  console.log('A user connected:', socket.id);
+
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+  });
+});
 
 // Middleware
 app.use(cors()); // Allow cross-origin requests
@@ -102,7 +120,8 @@ app.use(globalErrorHandler);
 const startServer = async () => {
   await connectDB();
 
-  app.listen(PORT, () => {
+  // Use httpServer.listen instead of app.listen
+  httpServer.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
   });
 };
