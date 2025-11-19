@@ -85,12 +85,12 @@ export const getMyHouseholds = asyncHandler(
 export const getHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
-    
+
     const userId = req.user?._id as Types.ObjectId;
     if (!userId) {
-         throw new AppError('Authentication error. User not found.', 401);
+      throw new AppError('Authentication error. User not found.', 401);
     }
-    
+
     // Fetch and populate (transforms familyMemberId into an Object)
     const household = await Household.findById(id).populate({
       path: 'memberProfiles.familyMemberId',
@@ -103,18 +103,18 @@ export const getHousehold = asyncHandler(
 
     // FIX: Handle the populated object correctly
     const isMember = household.memberProfiles.some((p) => {
-        // Because we populated, familyMemberId is now an object (IFamilyMember)
-        // We cast to 'any' to access _id safely without TS complaining about the union type
-        const memberDoc = p.familyMemberId as any;
-        
-        // Check if it has an _id (populated) or is just an ID (unpopulated fallback)
-        const memberId = memberDoc._id || memberDoc;
-        
-        return memberId.toString() === userId.toString();
+      // Because we populated, familyMemberId is now an object (IFamilyMember)
+      // We cast to 'any' to access _id safely without TS complaining about the union type
+      const memberDoc = p.familyMemberId as any;
+
+      // Check if it has an _id (populated) or is just an ID (unpopulated fallback)
+      const memberId = memberDoc._id || memberDoc;
+
+      return memberId.toString() === userId.toString();
     });
 
     if (!isMember) {
-        throw new AppError('You are not a member of this household.', 403);
+      throw new AppError('You are not a member of this household.', 403);
     }
 
     res.status(200).json({
@@ -133,14 +133,14 @@ export const updateHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
     const { householdName } = req.body;
-    
+
     const userId = req.user?._id as Types.ObjectId;
     if (!userId) {
-         throw new AppError('Authentication error. User not found.', 401);
+      throw new AppError('Authentication error. User not found.', 401);
     }
 
     if (!householdName) {
-        throw new AppError('householdName is required for update.', 400);
+      throw new AppError('householdName is required for update.', 400);
     }
 
     // Note: No populate here, so familyMemberId remains an ObjectId
@@ -152,11 +152,11 @@ export const updateHousehold = asyncHandler(
 
     // Authorization: Only a Parent of THIS household can update it
     const memberProfile = household.memberProfiles.find(
-        (p) => p.familyMemberId.toString() === userId.toString()
+      (p) => p.familyMemberId.toString() === userId.toString()
     );
 
     if (!memberProfile || memberProfile.role !== 'Parent') {
-        throw new AppError('Unauthorized. Only Parents can update household details.', 403);
+      throw new AppError('Unauthorized. Only Parents can update household details.', 403);
     }
 
     household.householdName = householdName;
@@ -177,10 +177,10 @@ export const updateHousehold = asyncHandler(
 export const deleteHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
-    
+
     const userId = req.user?._id as Types.ObjectId;
     if (!userId) {
-         throw new AppError('Authentication error. User not found.', 401);
+      throw new AppError('Authentication error. User not found.', 401);
     }
 
     const household = await Household.findById(id);
@@ -191,17 +191,17 @@ export const deleteHousehold = asyncHandler(
 
     // Authorization: Only a Parent of THIS household can delete it
     const memberProfile = household.memberProfiles.find(
-        (p) => p.familyMemberId.toString() === userId.toString()
+      (p) => p.familyMemberId.toString() === userId.toString()
     );
 
     if (!memberProfile || memberProfile.role !== 'Parent') {
-        throw new AppError('Unauthorized. Only Parents can delete a household.', 403);
+      throw new AppError('Unauthorized. Only Parents can delete a household.', 403);
     }
 
     // Cascade Delete: Clean up related data
     await Task.deleteMany({ householdRefId: id });
     await StoreItem.deleteMany({ householdRefId: id });
-    
+
     await Household.findByIdAndDelete(id);
 
     res.status(204).json({
@@ -433,4 +433,107 @@ export const removeMemberFromHousehold = asyncHandler(
 
     res.status(200).json(household);
   },
+);
+
+// --- INVITE SYSTEM ---
+
+const generateCode = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
+/**
+ * @desc    Get (or create) the invite code for a household
+ * @route   GET /api/households/:id/invite-code
+ * @access  Private (Parent only)
+ */
+export const getInviteCode = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user?._id as Types.ObjectId;
+
+    const household = await Household.findById(id);
+    if (!household) throw new AppError('Household not found', 404);
+
+    const isParent = household.memberProfiles.some(
+      (p) => p.familyMemberId.toString() === userId.toString() && p.role === 'Parent'
+    );
+    if (!isParent) throw new AppError('Unauthorized', 403);
+
+    if (!household.inviteCode) {
+      household.inviteCode = generateCode();
+      await household.save();
+    }
+
+    res.status(200).json({ inviteCode: household.inviteCode });
+  }
+);
+
+/**
+ * @desc    Regenerate a new invite code
+ * @route   POST /api/households/:id/invite-code
+ * @access  Private (Parent only)
+ */
+export const regenerateInviteCode = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { id } = req.params;
+    const userId = req.user?._id as Types.ObjectId;
+
+    const household = await Household.findById(id);
+    if (!household) throw new AppError('Household not found', 404);
+
+    const isParent = household.memberProfiles.some(
+      (p) => p.familyMemberId.toString() === userId.toString() && p.role === 'Parent'
+    );
+    if (!isParent) throw new AppError('Unauthorized', 403);
+
+    household.inviteCode = generateCode();
+    await household.save();
+
+    res.status(200).json({ inviteCode: household.inviteCode });
+  }
+);
+
+/**
+ * @desc    Join a household using an invite code
+ * @route   POST /api/households/join
+ * @access  Private (Any authenticated user)
+ */
+export const joinHousehold = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const { inviteCode } = req.body;
+    const userId = req.user?._id as Types.ObjectId;
+    const user = req.user;
+
+    if (!inviteCode) throw new AppError('Invite code is required', 400);
+
+    const household = await Household.findOne({ inviteCode: inviteCode.toUpperCase() });
+    if (!household) throw new AppError('Invalid invite code', 404);
+
+    const isMember = household.memberProfiles.some(
+      (p) => p.familyMemberId.toString() === userId.toString()
+    );
+    if (isMember) throw new AppError('You are already a member of this household', 400);
+
+    const newProfile: IHouseholdMemberProfile = {
+      familyMemberId: userId,
+      displayName: user?.firstName || 'New Member',
+      profileColor: '#3B82F6',
+      role: 'Parent',
+      pointsTotal: 0
+    };
+
+    household.memberProfiles.push(newProfile);
+    await household.save();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Joined household successfully',
+      householdId: household._id
+    });
+  }
 );

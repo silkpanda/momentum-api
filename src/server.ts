@@ -15,6 +15,10 @@ import householdRouter from './routes/householdRoutes';
 import taskRouter from './routes/taskRoutes';
 // NEW ADDITION: Import the store item router
 import storeItemRouter from './routes/storeItemRoutes';
+// NEW ADDITION: Import the quest router
+import questRouter from './routes/questRoutes';
+// NEW ADDITION: Import the routine router
+import routineRouter from './routes/routineRoutes';
 
 // NEW IMPORTS FOR ERROR HANDLING
 import AppError from './utils/AppError';
@@ -98,6 +102,15 @@ app.use('/api/v1/household', householdRouter); // Safety Alias
 app.use('/api/v1/tasks', taskRouter);
 // NEW ROUTE REGISTRATION: Register Store Item routes
 app.use('/api/v1/store-items', storeItemRouter);
+// NEW ROUTE REGISTRATION: Register Quest routes
+app.use('/api/v1/quests', questRouter);
+// NEW ROUTE REGISTRATION: Register Routine routes
+import mealRouter from './routes/mealRoutes';
+
+// ...
+
+app.use('/api/v1/routines', routineRouter);
+app.use('/api/v1/meals', mealRouter); // Register meal routes
 
 
 // Basic Health Check Route

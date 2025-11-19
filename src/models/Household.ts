@@ -15,16 +15,16 @@ export interface IHouseholdMemberProfile {
 // Interface for the main Household document
 export interface IHousehold extends Document {
   householdName: string; // e.g., "Smith-Jones Family"
-  
+
   // The new mandatory, unified array (replaces parentRefs and childProfiles)
   memberProfiles: IHouseholdMemberProfile[];
-  
-  // Other household-level data (e.g., tasks, store items) will be linked here
+
+  inviteCode?: string; // Unique code for joining
 }
 
 // Sub-schema for the embedded member profile data (camelCase, mandatory fields)
 const HouseholdMemberProfileSchema = new Schema<IHouseholdMemberProfile>({
-  familyMemberId: { 
+  familyMemberId: {
     type: Schema.Types.ObjectId,
     ref: 'FamilyMember', // Reference to the global user
     required: true,
@@ -48,9 +48,9 @@ const HouseholdMemberProfileSchema = new Schema<IHouseholdMemberProfile>({
     default: 0,
     min: 0,
   },
-}, { 
+}, {
   // This setting ensures Mongoose auto-generates the '_id' for this sub-document
-  _id: true 
+  _id: true
 });
 
 // Main Household Schema definition
@@ -62,9 +62,14 @@ const HouseholdSchema = new Schema<IHousehold>(
       trim: true,
     },
     // The new unified array, replacing the deprecated v2 model
-    memberProfiles: { 
+    memberProfiles: {
       type: [HouseholdMemberProfileSchema],
       default: [],
+    },
+    inviteCode: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows null/undefined to not conflict
     },
   },
   {

@@ -10,7 +10,7 @@ export interface IQuestClaim {
 
 export interface IQuestRecurrence {
     frequency: 'daily' | 'weekly' | 'monthly';
-    resetTime?: string;
+    resetTime?: string; // e.g. "00:00"
     lastReset?: Date;
     nextReset?: Date;
 }
@@ -22,12 +22,13 @@ export interface IQuest extends Document {
     pointsValue: number;
 
     // Quest-specific
-    questType: 'one-time' | 'limited' | 'unlimited' | 'recurring';
+    questType: 'one-time' | 'limited' | 'unlimited';
     maxClaims?: number;
     currentClaims: number;
 
     // Claims
     claims: IQuestClaim[];
+    claimHistory: IQuestClaim[]; // Archived claims
 
     // Recurrence
     recurrence?: IQuestRecurrence;
@@ -40,6 +41,15 @@ export interface IQuest extends Document {
     createdBy: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
+
+    // Virtuals
+    isClaimable: boolean;
+
+    // Methods
+    claimQuest(memberId: string): Promise<IQuest>;
+    completeQuest(memberId: string): Promise<IQuest>;
+    approveQuest(memberId: string): Promise<IQuest>;
+    checkAndProcessRecurrence(): Promise<IQuest | null>;
 }
 
 const QuestClaimSchema = new Schema<IQuestClaim>({
@@ -60,8 +70,8 @@ const QuestRecurrenceSchema = new Schema<IQuestRecurrence>({
         enum: ['daily', 'weekly', 'monthly'],
         required: true
     },
-    resetTime: { type: String },
-    lastReset: { type: Date },
+    resetTime: { type: String, default: '00:00' },
+    lastReset: { type: Date, default: Date.now },
     nextReset: { type: Date }
 });
 
@@ -87,7 +97,7 @@ const QuestSchema = new Schema<IQuest>({
     },
     questType: {
         type: String,
-        enum: ['one-time', 'limited', 'unlimited', 'recurring'],
+        enum: ['one-time', 'limited', 'unlimited'],
         default: 'one-time'
     },
     maxClaims: {
@@ -99,6 +109,7 @@ const QuestSchema = new Schema<IQuest>({
         default: 0
     },
     claims: [QuestClaimSchema],
+    claimHistory: [QuestClaimSchema],
     recurrence: QuestRecurrenceSchema,
     isActive: {
         type: Boolean,
@@ -115,11 +126,10 @@ const QuestSchema = new Schema<IQuest>({
 
 // Indexes for performance
 QuestSchema.index({ householdId: 1, isActive: 1 });
-QuestSchema.index({ householdId: 1, questType: 1 });
-QuestSchema.index({ expiresAt: 1 });
+QuestSchema.index({ 'recurrence.nextReset': 1 });
 
 // Virtual to check if quest is claimable
-QuestSchema.virtual('isClaimable').get(function () {
+QuestSchema.virtual('isClaimable').get(function (this: IQuest) {
     if (!this.isActive) return false;
     if (this.expiresAt && this.expiresAt < new Date()) return false;
 
@@ -131,7 +141,7 @@ QuestSchema.virtual('isClaimable').get(function () {
         return this.currentClaims < this.maxClaims;
     }
 
-    return true; // unlimited or recurring
+    return true; // unlimited
 });
 
 // Method to claim quest
@@ -192,6 +202,47 @@ QuestSchema.methods.approveQuest = function (memberId: string) {
     claim.pointsAwarded = this.pointsValue;
 
     return this.save();
+};
+
+// Method to check and process recurrence
+QuestSchema.methods.checkAndProcessRecurrence = function () {
+    if (!this.recurrence || !this.recurrence.nextReset) return Promise.resolve(null);
+
+    const now = new Date();
+    if (now >= this.recurrence.nextReset) {
+        console.log(`[Quest] Resetting recurring quest: ${this.title}`);
+
+        // Archive current claims
+        if (this.claims.length > 0) {
+            this.claimHistory.push(...this.claims);
+            this.claims = [];
+        }
+
+        // Reset counters
+        this.currentClaims = 0;
+
+        // Calculate next reset
+        const lastReset = this.recurrence.nextReset; // The one that just passed
+        let nextReset = new Date(lastReset);
+
+        // Loop to find the next future reset time
+        while (nextReset <= now) {
+            if (this.recurrence.frequency === 'daily') {
+                nextReset.setDate(nextReset.getDate() + 1);
+            } else if (this.recurrence.frequency === 'weekly') {
+                nextReset.setDate(nextReset.getDate() + 7);
+            } else if (this.recurrence.frequency === 'monthly') {
+                nextReset.setMonth(nextReset.getMonth() + 1);
+            }
+        }
+
+        this.recurrence.lastReset = new Date(); // Mark actual reset time
+        this.recurrence.nextReset = nextReset;
+
+        return this.save();
+    }
+
+    return Promise.resolve(null);
 };
 
 export default mongoose.model<IQuest>('Quest', QuestSchema);

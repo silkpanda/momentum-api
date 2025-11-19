@@ -10,6 +10,9 @@ import {
   addMemberToHousehold,
   updateMemberProfile,
   removeMemberFromHousehold,
+  getInviteCode,
+  regenerateInviteCode,
+  joinHousehold,
 } from '../controllers/householdController';
 
 const router = express.Router();
@@ -20,6 +23,10 @@ router.use(protect);
 // -----------------------------------------------------------
 // A. Core Household Routes
 // -----------------------------------------------------------
+
+// @route   POST /api/households/join
+// @desc    Join a household via invite code
+router.post('/join', joinHousehold);
 
 // @route   POST /api/households
 // @desc    Create a new household
@@ -38,7 +45,15 @@ router.route('/:id')
   .delete(deleteHousehold);
 
 // -----------------------------------------------------------
-// B. Household Member Management Routes
+// B. Invite System Routes
+// -----------------------------------------------------------
+
+router.route('/:id/invite-code')
+  .get(getInviteCode)
+  .post(regenerateInviteCode);
+
+// -----------------------------------------------------------
+// C. Household Member Management Routes
 // -----------------------------------------------------------
 
 // @route   POST /api/households/:householdId/members
