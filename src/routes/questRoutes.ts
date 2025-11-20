@@ -14,6 +14,7 @@ router
 
 router
     .route('/:id')
+    .put(questController.updateQuest)
     .delete(questController.deleteQuest);
 
 // Quest Action Routes

@@ -80,6 +80,58 @@ export const createQuest = asyncHandler(
 );
 
 /**
+ * @desc    Update a quest
+ * @route   PUT /api/v1/quests/:id
+ * @access  Private (Parent only)
+ */
+export const updateQuest = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response) => {
+        const { id } = req.params;
+        const { title, description, pointsValue, questType, maxClaims, recurrence, dueDate } = req.body;
+        const householdId = req.householdId;
+
+        const quest = await Quest.findOne({ _id: id, householdId });
+
+        if (!quest) {
+            throw new AppError('Quest not found.', 404);
+        }
+
+        // Update basic fields
+        if (title !== undefined) quest.title = title;
+        if (description !== undefined) quest.description = description;
+        if (pointsValue !== undefined) quest.pointsValue = pointsValue;
+        if (questType !== undefined) quest.questType = questType;
+        if (maxClaims !== undefined) quest.maxClaims = maxClaims;
+        if (dueDate !== undefined) quest.expiresAt = dueDate;
+
+        // Handle recurrence updates
+        if (recurrence !== undefined) {
+            if (recurrence === 'none' || !recurrence) {
+                quest.recurrence = undefined;
+            } else {
+                const recurrenceData = {
+                    frequency: recurrence,
+                    resetTime: quest.recurrence?.resetTime || '00:00',
+                    lastReset: quest.recurrence?.lastReset || new Date(),
+                    nextReset: quest.recurrence?.nextReset || calculateNextReset(recurrence)
+                };
+                quest.recurrence = recurrenceData;
+            }
+        }
+
+        await quest.save();
+
+        // Real-time update
+        io.emit('quest_updated', { type: 'update', quest });
+
+        res.status(200).json({
+            status: 'success',
+            data: { quest },
+        });
+    }
+);
+
+/**
  * @desc    Get all quests for the household
  * @route   GET /api/v1/quests
  * @access  Private
