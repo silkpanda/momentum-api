@@ -17,6 +17,11 @@ export const getRecipes = asyncHandler(async (req: AuthenticatedRequest, res: Re
 
 export const createRecipe = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const householdId = req.householdId;
+
+    if (!householdId) {
+        throw new AppError('Household ID not found in request. Please ensure you are authenticated.', 401);
+    }
+
     const recipe = await Recipe.create({ ...req.body, householdId });
     res.status(201).json({ status: 'success', data: { recipe } });
 });
@@ -49,6 +54,14 @@ export const getRestaurants = asyncHandler(async (req: AuthenticatedRequest, res
 
 export const createRestaurant = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const householdId = req.householdId;
+
+    if (!householdId) {
+        throw new AppError('Household ID not found in request. Please ensure you are authenticated.', 401);
+    }
+
+    console.log('[Meal Controller] Creating restaurant for household:', householdId);
+    console.log('[Meal Controller] Request body:', req.body);
+
     const restaurant = await Restaurant.create({ ...req.body, householdId });
     res.status(201).json({ status: 'success', data: { restaurant } });
 });
