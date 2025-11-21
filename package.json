@@ -9,7 +9,7 @@
     "dev": "nodemon src/server.ts",
     "tunnel": "npx ngrok http 3000",
     "dev:tunnel": "concurrently npm:dev npm:tunnel",
-    "build": "tsc",
+    "build": "rimraf dist && tsc",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "format": "prettier --write \"{src,test}/**/*.ts\"",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -51,6 +51,7 @@
     "ngrok": "^5.0.0-beta.2",
     "nodemon": "^3.1.2",
     "prettier": "^3.2.5",
+    "rimraf": "^6.1.2",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   }
