@@ -30,7 +30,7 @@ dotenv.config();
 
 // Mandatory governance check: Ensure critical environment variables are set
 const MONGO_URI = process.env.MONGO_URI || '';
-const PORT = process.env.PORT || 3000;
+const PORT = (process.env.PORT && process.env.PORT !== '3000') ? process.env.PORT : 3001;
 
 if (!MONGO_URI) {
   console.error(
