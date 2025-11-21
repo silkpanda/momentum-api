@@ -8,6 +8,7 @@ import Task from '../models/Task'; // Required for cleanup
 import StoreItem from '../models/StoreItem'; // Required for cleanup
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import AppError from '../utils/AppError';
+import { io } from '../server'; // Import Socket.io instance
 
 /**
  * @desc    Create a new household
@@ -162,6 +163,9 @@ export const updateHousehold = asyncHandler(
     household.householdName = householdName;
     await household.save();
 
+    // Emit real-time update
+    io.emit('household_updated', { type: 'update', householdId: id, householdName });
+
     res.status(200).json({
       status: 'success',
       data: household,
@@ -305,6 +309,9 @@ export const addMemberToHousehold = asyncHandler(
       select: 'firstName email',
     });
 
+    // Emit real-time update
+    io.emit('household_updated', { type: 'member_add', householdId, member: finalHousehold.memberProfiles.find((p) => p.familyMemberId.equals(familyMemberId)) });
+
     res.status(201).json({
       status: 'success',
       message: 'Member added to household successfully.',
@@ -366,6 +373,9 @@ export const updateMemberProfile = asyncHandler(
     if (role) memberProfile.role = role;
 
     await household.save();
+
+    // Emit real-time update
+    io.emit('household_updated', { type: 'member_update', householdId, memberProfile });
 
     res.status(200).json(household);
   },
@@ -430,6 +440,9 @@ export const removeMemberFromHousehold = asyncHandler(
     );
 
     await household.save();
+
+    // Emit real-time update
+    io.emit('household_updated', { type: 'member_remove', householdId, memberProfileId });
 
     res.status(200).json(household);
   },

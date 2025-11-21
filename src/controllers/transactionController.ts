@@ -6,6 +6,7 @@ import StoreItem from '../models/StoreItem';
 import Transaction from '../models/Transaction';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { IFamilyMember } from '../models/FamilyMember';
+import { io } from '../server'; // Import Socket.io instance
 
 // Helper to handle standard model CRUD response
 const handleResponse = (res: Response, status: number, message: string, data?: any): void => {
@@ -97,9 +98,17 @@ export const purchaseStoreItem = async (req: AuthenticatedRequest, res: Response
     });
 
     // FIX: Find new total from 'memberProfiles'
-    const newPointsTotal = updatedHousehold.memberProfiles.find(
+    const updatedMemberProfile = updatedHousehold.memberProfiles.find(
       (p) => p.familyMemberId.equals(memberId)
-    )?.pointsTotal;
+    );
+    const newPointsTotal = updatedMemberProfile?.pointsTotal;
+
+    // Emit real-time update for member points
+    io.emit('member_points_updated', {
+      memberId: updatedMemberProfile?._id,
+      pointsTotal: newPointsTotal,
+      householdId: householdId,
+    });
 
     res.status(200).json({
       status: 'success',
