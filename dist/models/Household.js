@@ -44,6 +44,11 @@ const HouseholdSchema = new mongoose_1.Schema({
         type: [HouseholdMemberProfileSchema],
         default: [],
     },
+    inviteCode: {
+        type: String,
+        unique: true,
+        sparse: true, // Allows null/undefined to not conflict
+    },
 }, {
     timestamps: true,
     collection: 'households', // Mandatory lowercase_plural collection name

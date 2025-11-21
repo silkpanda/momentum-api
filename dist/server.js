@@ -53,6 +53,10 @@ const householdRoutes_1 = __importDefault(require("./routes/householdRoutes"));
 const taskRoutes_1 = __importDefault(require("./routes/taskRoutes"));
 // NEW ADDITION: Import the store item router
 const storeItemRoutes_1 = __importDefault(require("./routes/storeItemRoutes"));
+// NEW ADDITION: Import the quest router
+const questRoutes_1 = __importDefault(require("./routes/questRoutes"));
+// NEW ADDITION: Import the routine router
+const routineRoutes_1 = __importDefault(require("./routes/routineRoutes"));
 // NEW IMPORTS FOR ERROR HANDLING
 const AppError_1 = __importDefault(require("./utils/AppError"));
 // FIX APPLIED: Changed to named import for globalErrorHandler
@@ -120,6 +124,13 @@ app.use('/api/v1/household', householdRoutes_1.default); // Safety Alias
 app.use('/api/v1/tasks', taskRoutes_1.default);
 // NEW ROUTE REGISTRATION: Register Store Item routes
 app.use('/api/v1/store-items', storeItemRoutes_1.default);
+// NEW ROUTE REGISTRATION: Register Quest routes
+app.use('/api/v1/quests', questRoutes_1.default);
+// NEW ROUTE REGISTRATION: Register Routine routes
+const mealRoutes_1 = __importDefault(require("./routes/mealRoutes"));
+// ...
+app.use('/api/v1/routines', routineRoutes_1.default);
+app.use('/api/v1/meals', mealRoutes_1.default); // Register meal routes
 // Basic Health Check Route
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'API is running', environment: process.env.NODE_ENV });

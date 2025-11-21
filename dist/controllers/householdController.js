@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.removeMemberFromHousehold = exports.updateMemberProfile = exports.addMemberToHousehold = exports.deleteHousehold = exports.updateHousehold = exports.getHousehold = exports.getMyHouseholds = exports.createHousehold = void 0;
+exports.joinHousehold = exports.regenerateInviteCode = exports.getInviteCode = exports.removeMemberFromHousehold = exports.updateMemberProfile = exports.addMemberToHousehold = exports.deleteHousehold = exports.updateHousehold = exports.getHousehold = exports.getMyHouseholds = exports.createHousehold = void 0;
 const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const mongoose_1 = require("mongoose"); // Import mongoose for CastError check
 const Household_1 = __importDefault(require("../models/Household"));
@@ -292,5 +292,84 @@ exports.removeMemberFromHousehold = (0, express_async_handler_1.default)(async (
     household.memberProfiles = household.memberProfiles.filter((member) => !member._id.equals(memberProfileId));
     await household.save();
     res.status(200).json(household);
+});
+// --- INVITE SYSTEM ---
+const generateCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+};
+/**
+ * @desc    Get (or create) the invite code for a household
+ * @route   GET /api/households/:id/invite-code
+ * @access  Private (Parent only)
+ */
+exports.getInviteCode = (0, express_async_handler_1.default)(async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user?._id;
+    const household = await Household_1.default.findById(id);
+    if (!household)
+        throw new AppError_1.default('Household not found', 404);
+    const isParent = household.memberProfiles.some((p) => p.familyMemberId.toString() === userId.toString() && p.role === 'Parent');
+    if (!isParent)
+        throw new AppError_1.default('Unauthorized', 403);
+    if (!household.inviteCode) {
+        household.inviteCode = generateCode();
+        await household.save();
+    }
+    res.status(200).json({ inviteCode: household.inviteCode });
+});
+/**
+ * @desc    Regenerate a new invite code
+ * @route   POST /api/households/:id/invite-code
+ * @access  Private (Parent only)
+ */
+exports.regenerateInviteCode = (0, express_async_handler_1.default)(async (req, res) => {
+    const { id } = req.params;
+    const userId = req.user?._id;
+    const household = await Household_1.default.findById(id);
+    if (!household)
+        throw new AppError_1.default('Household not found', 404);
+    const isParent = household.memberProfiles.some((p) => p.familyMemberId.toString() === userId.toString() && p.role === 'Parent');
+    if (!isParent)
+        throw new AppError_1.default('Unauthorized', 403);
+    household.inviteCode = generateCode();
+    await household.save();
+    res.status(200).json({ inviteCode: household.inviteCode });
+});
+/**
+ * @desc    Join a household using an invite code
+ * @route   POST /api/households/join
+ * @access  Private (Any authenticated user)
+ */
+exports.joinHousehold = (0, express_async_handler_1.default)(async (req, res) => {
+    const { inviteCode } = req.body;
+    const userId = req.user?._id;
+    const user = req.user;
+    if (!inviteCode)
+        throw new AppError_1.default('Invite code is required', 400);
+    const household = await Household_1.default.findOne({ inviteCode: inviteCode.toUpperCase() });
+    if (!household)
+        throw new AppError_1.default('Invalid invite code', 404);
+    const isMember = household.memberProfiles.some((p) => p.familyMemberId.toString() === userId.toString());
+    if (isMember)
+        throw new AppError_1.default('You are already a member of this household', 400);
+    const newProfile = {
+        familyMemberId: userId,
+        displayName: user?.firstName || 'New Member',
+        profileColor: '#3B82F6',
+        role: 'Parent',
+        pointsTotal: 0
+    };
+    household.memberProfiles.push(newProfile);
+    await household.save();
+    res.status(200).json({
+        status: 'success',
+        message: 'Joined household successfully',
+        householdId: household._id
+    });
 });
 //# sourceMappingURL=householdController.js.map

@@ -13,6 +13,9 @@ router.use(authMiddleware_1.protect);
 // -----------------------------------------------------------
 // A. Core Household Routes
 // -----------------------------------------------------------
+// @route   POST /api/households/join
+// @desc    Join a household via invite code
+router.post('/join', householdController_1.joinHousehold);
 // @route   POST /api/households
 // @desc    Create a new household
 router.route('/').post(householdController_1.createHousehold);
@@ -27,7 +30,13 @@ router.route('/:id')
     .patch(householdController_1.updateHousehold)
     .delete(householdController_1.deleteHousehold);
 // -----------------------------------------------------------
-// B. Household Member Management Routes
+// B. Invite System Routes
+// -----------------------------------------------------------
+router.route('/:id/invite-code')
+    .get(householdController_1.getInviteCode)
+    .post(householdController_1.regenerateInviteCode);
+// -----------------------------------------------------------
+// C. Household Member Management Routes
 // -----------------------------------------------------------
 // @route   POST /api/households/:householdId/members
 // @desc    Add a new member to the household (Parent or Child)
