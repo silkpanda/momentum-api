@@ -7,7 +7,7 @@ import FamilyMember from '../models/FamilyMember';
 import Task from '../models/Task'; // Required for cleanup
 import StoreItem from '../models/StoreItem'; // Required for cleanup
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import AppError from '../utils/appError';
+import AppError from '../utils/applicationError';
 
 /**
  * @desc    Create a new household

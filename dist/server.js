@@ -58,7 +58,7 @@ const questRoutes_1 = __importDefault(require("./routes/questRoutes"));
 // NEW ADDITION: Import the routine router
 const routineRoutes_1 = __importDefault(require("./routes/routineRoutes"));
 // NEW IMPORTS FOR ERROR HANDLING
-const appError_1 = __importDefault(require("./utils/appError"));
+const applicationError_1 = __importDefault(require("./utils/applicationError"));
 // FIX APPLIED: Changed to named import for globalErrorHandler
 const errorHandler_1 = require("./utils/errorHandler");
 // 1. Load Environment Variables
@@ -139,7 +139,7 @@ app.get('/api/health', (req, res) => {
 // Catch all for routes not defined by the application
 app.all('*', (req, res, next) => {
     // Use the AppError utility to create an operational error
-    next(new appError_1.default(`Can't find ${req.originalUrl} on this server!`, 404));
+    next(new applicationError_1.default(`Can't find ${req.originalUrl} on this server!`, 404));
 });
 // 4c. GLOBAL ERROR HANDLER
 // This middleware runs whenever next(err) is called with an error object

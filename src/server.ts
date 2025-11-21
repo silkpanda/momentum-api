@@ -21,7 +21,7 @@ import questRouter from './routes/questRoutes';
 import routineRouter from './routes/routineRoutes';
 
 // NEW IMPORTS FOR ERROR HANDLING
-import AppError from './utils/appError';
+import AppError from './utils/applicationError';
 // FIX APPLIED: Changed to named import for globalErrorHandler
 import { globalErrorHandler } from './utils/errorHandler';
 
