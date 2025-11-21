@@ -1,6 +1,6 @@
 // src/utils/errorHandler.ts
 import { Request, Response, NextFunction } from 'express';
-import AppError from './applicationError';
+import AppError from './AppError';
 
 // Global error handler middleware
 // CHANGED TO NAMED EXPORT: export const globalErrorHandler

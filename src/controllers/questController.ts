@@ -3,7 +3,7 @@ import asyncHandler from 'express-async-handler';
 import { Types } from 'mongoose';
 import Quest from '../models/Quest';
 import Household from '../models/Household';
-import AppError from '../utils/applicationError';
+import AppError from '../utils/AppError';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { io } from '../server';
 

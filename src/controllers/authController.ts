@@ -7,7 +7,7 @@ import Household, { IHouseholdMemberProfile } from '../models/Household'; // Imp
 import { JWT_SECRET, JWT_EXPIRES_IN } from '../config/constants';
 import { IFamilyMember } from '../models/FamilyMember';
 import { AuthenticatedRequest } from '../middleware/authMiddleware'; // FIX: Use AuthenticatedRequest
-import AppError from '../utils/applicationError';
+import AppError from '../utils/AppError';
 import asyncHandler from 'express-async-handler'; // NEW IMPORT for restrictTo
 
 // Helper function to generate a JWT (used by both signup and login)

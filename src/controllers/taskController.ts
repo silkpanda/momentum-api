@@ -4,7 +4,7 @@ import asyncHandler from 'express-async-handler';
 import mongoose, { Types } from 'mongoose';
 import Task from '../models/Task';
 import Household from '../models/Household';
-import AppError from '../utils/applicationError';
+import AppError from '../utils/AppError';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { io } from '../server'; // Import Socket.io instance
 

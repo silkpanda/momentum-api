@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import asyncHandler from 'express-async-handler'; // Required for protect function
 import FamilyMember, { IFamilyMember } from '../models/FamilyMember';
-import AppError from '../utils/applicationError';
+import AppError from '../utils/AppError';
 import { Types } from 'mongoose';
 import { JWT_SECRET } from '../config/constants'; // Import JWT_SECRET
 
