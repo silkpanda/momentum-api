@@ -8,7 +8,7 @@ const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const FamilyMember_1 = __importDefault(require("../models/FamilyMember"));
 const Household_1 = __importDefault(require("../models/Household")); // Import IHouseholdMemberProfile
 const constants_1 = require("../config/constants");
-const applicationError_1 = __importDefault(require("../utils/applicationError"));
+const AppError_1 = __importDefault(require("../utils/AppError"));
 const express_async_handler_1 = __importDefault(require("express-async-handler")); // NEW IMPORT for restrictTo
 // Helper function to generate a JWT (used by both signup and login)
 const signToken = (id, householdId) => {
@@ -30,7 +30,7 @@ exports.signup = (0, express_async_handler_1.default)(async (req, res, next) => 
     const { firstName, lastName, email, password } = req.body;
     const { householdName, userDisplayName, userProfileColor } = req.body; // New fields for v3
     if (!firstName || !lastName || !email || !password || !householdName || !userDisplayName || !userProfileColor) {
-        return next(new applicationError_1.default('Missing mandatory fields for signup and initial household profile (firstName, lastName, email, password, householdName, userDisplayName, userProfileColor).', 400));
+        return next(new AppError_1.default('Missing mandatory fields for signup and initial household profile (firstName, lastName, email, password, householdName, userDisplayName, userProfileColor).', 400));
     }
     try {
         // 1. Create the Parent FamilyMember document (global identity)
@@ -69,9 +69,9 @@ exports.signup = (0, express_async_handler_1.default)(async (req, res, next) => 
     catch (err) {
         // Handle duplicate key error (email already exists)
         if (err.code === 11000) {
-            return next(new applicationError_1.default('This email address is already registered.', 409));
+            return next(new AppError_1.default('This email address is already registered.', 409));
         }
-        return next(new applicationError_1.default(`Failed to create user or household: ${err.message}`, 500));
+        return next(new AppError_1.default(`Failed to create user or household: ${err.message}`, 500));
     }
 });
 /**
@@ -81,14 +81,14 @@ exports.signup = (0, express_async_handler_1.default)(async (req, res, next) => 
 exports.login = (0, express_async_handler_1.default)(async (req, res, next) => {
     const { email, password } = req.body;
     if (!email || !password) {
-        return next(new applicationError_1.default('Please provide email and password.', 400));
+        return next(new AppError_1.default('Please provide email and password.', 400));
     }
     // 1. Find user by email and explicitly select the password field
     const familyMember = await FamilyMember_1.default.findOne({ email }).select('+password');
     // 2. Check if user exists and password is correct
     const isPasswordCorrect = familyMember && (await familyMember.comparePassword(password));
     if (!isPasswordCorrect) {
-        return next(new applicationError_1.default('Incorrect email or password.', 401));
+        return next(new AppError_1.default('Incorrect email or password.', 401));
     }
     // 3. CRITICAL: Find a Household where this FamilyMember is a 'Parent'
     const parentId = familyMember._id;
@@ -97,7 +97,7 @@ exports.login = (0, express_async_handler_1.default)(async (req, res, next) => {
         'memberProfiles.role': 'Parent', //
     });
     if (!household) {
-        return next(new applicationError_1.default('User does not belong to any household as a Parent.', 401));
+        return next(new AppError_1.default('User does not belong to any household as a Parent.', 401));
     }
     // FIX: Explicitly cast _id to resolve 'unknown' type
     const primaryHouseholdId = household._id;
@@ -123,19 +123,19 @@ const restrictTo = (...roles) => {
     return (0, express_async_handler_1.default)(async (req, res, next) => {
         // 1. Check if user and householdId are attached by 'protect' middleware
         if (!req.user || !req.householdId) {
-            return next(new applicationError_1.default('Role check failed: Missing user or household context from token.', 401));
+            return next(new AppError_1.default('Role check failed: Missing user or household context from token.', 401));
         }
         // 2. Fetch the household from the database using the ID from the token
         const currentHousehold = await Household_1.default.findById(req.householdId);
         if (!currentHousehold) {
-            return next(new applicationError_1.default('Role check failed: The household associated with your token no longer exists.', 401));
+            return next(new AppError_1.default('Role check failed: The household associated with your token no longer exists.', 401));
         }
         // 3. Find the user's profile *within* that household
         // FIX APPLIED HERE: Cast req.user!._id to Types.ObjectId
         const userHouseholdProfile = currentHousehold.memberProfiles.find((member) => member.familyMemberId.equals(req.user._id));
         // 4. Check if the profile exists and their role is allowed
         if (!userHouseholdProfile || !roles.includes(userHouseholdProfile.role)) {
-            return next(new applicationError_1.default('You do not have permission to perform this action in this household.', 403));
+            return next(new AppError_1.default('You do not have permission to perform this action in this household.', 403));
         }
         // 5. User has the correct role, grant access
         next();
