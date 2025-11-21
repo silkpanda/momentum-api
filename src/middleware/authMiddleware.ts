@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import asyncHandler from 'express-async-handler'; // Required for protect function
 import FamilyMember, { IFamilyMember } from '../models/FamilyMember';
-import AppError from '../utils/AppError';
+import AppError from '../utils/appError';
 import { Types } from 'mongoose';
 import { JWT_SECRET } from '../config/constants'; // Import JWT_SECRET
 
@@ -54,24 +54,24 @@ export const protect = asyncHandler(
         ),
       );
     }
-    
+
     // 4. Check if user changed password after the token was issued 
     if (currentUser.passwordChangedAt) {
-        const passwordChangedTimestamp = currentUser.passwordChangedAt.getTime() / 1000;
-        
-        // JWT payload 'iat' (issued at) is in seconds
-        if (passwordChangedTimestamp > (decoded.iat as number)) {
-            return next(
-                new AppError('User recently changed password! Please log in again.', 401)
-            );
-        }
+      const passwordChangedTimestamp = currentUser.passwordChangedAt.getTime() / 1000;
+
+      // JWT payload 'iat' (issued at) is in seconds
+      if (passwordChangedTimestamp > (decoded.iat as number)) {
+        return next(
+          new AppError('User recently changed password! Please log in again.', 401)
+        );
+      }
     }
 
     // GRANT ACCESS TO PROTECTED ROUTE
     // Attach the user document and household context to the request
     req.user = currentUser;
     req.householdId = new Types.ObjectId(decoded.householdId); // Attach household context
-    
+
     next();
   },
 );

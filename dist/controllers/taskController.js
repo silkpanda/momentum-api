@@ -7,7 +7,7 @@ exports.approveTask = exports.completeTask = exports.deleteTask = exports.update
 const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const Task_1 = __importDefault(require("../models/Task"));
 const Household_1 = __importDefault(require("../models/Household"));
-const AppError_1 = __importDefault(require("../utils/AppError"));
+const appError_1 = __importDefault(require("../utils/appError"));
 const server_1 = require("../server"); // Import Socket.io instance
 /**
  * @desc    Create a new task
@@ -18,7 +18,7 @@ exports.createTask = (0, express_async_handler_1.default)(async (req, res) => {
     const { title, description, pointsValue, assignedTo, dueDate } = req.body;
     const householdId = req.householdId; // From JWT
     if (!title || pointsValue === undefined || !assignedTo || assignedTo.length === 0) {
-        throw new AppError_1.default('Missing required fields: title, pointsValue, and at least one assignedTo ID are required.', 400);
+        throw new appError_1.default('Missing required fields: title, pointsValue, and at least one assignedTo ID are required.', 400);
     }
     const task = await Task_1.default.create({
         householdId,
@@ -67,7 +67,7 @@ exports.getTaskById = (0, express_async_handler_1.default)(async (req, res) => {
     const task = await Task_1.default.findOne({ _id: taskId, householdId: householdId })
         .populate('assignedTo', 'displayName profileColor');
     if (!task) {
-        throw new AppError_1.default('No task found with that ID in this household.', 404);
+        throw new appError_1.default('No task found with that ID in this household.', 404);
     }
     res.status(200).json({
         status: 'success',
@@ -90,7 +90,7 @@ exports.updateTask = (0, express_async_handler_1.default)(async (req, res) => {
     const { title, description, pointsValue, assignedTo, dueDate, status } = req.body;
     const task = await Task_1.default.findOneAndUpdate({ _id: taskId, householdId: householdId }, { title, description, pointsValue, assignedTo, dueDate, status }, { new: true, runValidators: true });
     if (!task) {
-        throw new AppError_1.default('No task found with that ID in this household.', 404);
+        throw new appError_1.default('No task found with that ID in this household.', 404);
     }
     // Emit real-time update
     server_1.io.emit('task_updated', { type: 'update', task });
@@ -114,7 +114,7 @@ exports.deleteTask = (0, express_async_handler_1.default)(async (req, res) => {
         householdId: householdId,
     });
     if (!task) {
-        throw new AppError_1.default('No task found with that ID in this household.', 404);
+        throw new appError_1.default('No task found with that ID in this household.', 404);
     }
     // Emit real-time update
     server_1.io.emit('task_updated', { type: 'delete', taskId });
@@ -139,7 +139,7 @@ exports.completeTask = (0, express_async_handler_1.default)(async (req, res) => 
     // 1. Find the household
     const household = await Household_1.default.findById(householdId);
     if (!household) {
-        throw new AppError_1.default('Household not found.', 404);
+        throw new appError_1.default('Household not found.', 404);
     }
     // 2. Determine which member is completing the task
     let memberProfile;
@@ -148,26 +148,26 @@ exports.completeTask = (0, express_async_handler_1.default)(async (req, res) => 
         // Verify that this memberId exists in the household
         memberProfile = household.memberProfiles.find((p) => p._id?.equals(memberId));
         if (!memberProfile) {
-            throw new AppError_1.default('Member not found in this household.', 404);
+            throw new appError_1.default('Member not found in this household.', 404);
         }
     }
     else {
         // Case B: Implicit (User completing their own task - e.g., Parent)
         memberProfile = household.memberProfiles.find((p) => p.familyMemberId.equals(loggedInUserId));
         if (!memberProfile) {
-            throw new AppError_1.default('Your member profile was not found in this household.', 404);
+            throw new appError_1.default('Your member profile was not found in this household.', 404);
         }
     }
     // 3. Find the task
     const task = await Task_1.default.findOne({ _id: taskId, householdId: householdId });
     if (!task) {
-        throw new AppError_1.default('Task not found.', 404);
+        throw new appError_1.default('Task not found.', 404);
     }
     // 4. Check if member is assigned to this task
     // We use .toString() for reliable comparison of ObjectIds
     const isAssigned = task.assignedTo.some((assignedId) => assignedId.toString() === memberProfile._id.toString());
     if (!isAssigned) {
-        throw new AppError_1.default('This member is not assigned to this task.', 403);
+        throw new appError_1.default('This member is not assigned to this task.', 403);
     }
     // 5. Update the task status
     task.status = 'PendingApproval';
@@ -198,20 +198,20 @@ exports.approveTask = (0, express_async_handler_1.default)(async (req, res) => {
         status: 'PendingApproval', // Can only approve tasks that are pending
     });
     if (!task) {
-        throw new AppError_1.default('Task not found or is not pending approval.', 404);
+        throw new appError_1.default('Task not found or is not pending approval.', 404);
     }
     if (!task.completedBy) {
-        throw new AppError_1.default('Task cannot be approved: completedBy field is missing.', 400);
+        throw new appError_1.default('Task cannot be approved: completedBy field is missing.', 400);
     }
     // 2. Find the household to update points
     const household = await Household_1.default.findById(householdId);
     if (!household) {
-        throw new AppError_1.default('Household not found.', 404);
+        throw new appError_1.default('Household not found.', 404);
     }
     // 3. Find the member profile who completed the task
     const memberProfile = household.memberProfiles.find((p) => p._id?.equals(task.completedBy));
     if (!memberProfile) {
-        throw new AppError_1.default('Member profile who completed task not found.', 404);
+        throw new appError_1.default('Member profile who completed task not found.', 404);
     }
     // 4. Atomically update the member's points and save the task status
     memberProfile.pointsTotal = (memberProfile.pointsTotal || 0) + task.pointsValue;

@@ -2,7 +2,7 @@ import { Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import Routine from '../models/Routine';
 import Household from '../models/Household';
-import AppError from '../utils/AppError';
+import AppError from '../utils/appError';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { io } from '../server';
 

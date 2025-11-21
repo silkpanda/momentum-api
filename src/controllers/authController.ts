@@ -7,18 +7,18 @@ import Household, { IHouseholdMemberProfile } from '../models/Household'; // Imp
 import { JWT_SECRET, JWT_EXPIRES_IN } from '../config/constants';
 import { IFamilyMember } from '../models/FamilyMember';
 import { AuthenticatedRequest } from '../middleware/authMiddleware'; // FIX: Use AuthenticatedRequest
-import AppError from '../utils/AppError';
+import AppError from '../utils/appError';
 import asyncHandler from 'express-async-handler'; // NEW IMPORT for restrictTo
 
 // Helper function to generate a JWT (used by both signup and login)
 const signToken = (id: string, householdId: string): string => {
   // Payload contains the user ID and their *current context* household ID
   const payload = { id, householdId };
-  
-  const options: SignOptions = { 
-      expiresIn: JWT_EXPIRES_IN as any,
+
+  const options: SignOptions = {
+    expiresIn: JWT_EXPIRES_IN as any,
   };
-  
+
   return jwt.sign(payload, JWT_SECRET, options);
 };
 
@@ -46,16 +46,16 @@ export const signup = asyncHandler(async (req: Request, res: Response, next: Nex
       email,
       password, // Hashed by the 'pre-save' hook
     });
-    
-    const parentId: Types.ObjectId = newParent._id as Types.ObjectId; 
-    
+
+    const parentId: Types.ObjectId = newParent._id as Types.ObjectId;
+
     // 2. Create the initial Parent Profile sub-document for the Household
     const creatorProfile: IHouseholdMemberProfile = {
-        familyMemberId: parentId, 
-        displayName: userDisplayName,
-        profileColor: userProfileColor,
-        role: 'Parent', // The creator is always a Parent
-        pointsTotal: 0,
+      familyMemberId: parentId,
+      displayName: userDisplayName,
+      profileColor: userProfileColor,
+      role: 'Parent', // The creator is always a Parent
+      pointsTotal: 0,
     };
 
     // 3. Create the initial Household, linking the parent's profile
@@ -65,7 +65,7 @@ export const signup = asyncHandler(async (req: Request, res: Response, next: Nex
     });
 
     const householdId: Types.ObjectId = newHousehold._id as Types.ObjectId;
-    
+
     // 4. Generate and return JWT
     const token = signToken(parentId.toString(), householdId.toString());
 
@@ -80,7 +80,7 @@ export const signup = asyncHandler(async (req: Request, res: Response, next: Nex
 
   } catch (err: any) {
     // Handle duplicate key error (email already exists)
-    if (err.code === 11000) { 
+    if (err.code === 11000) {
       return next(new AppError('This email address is already registered.', 409));
     }
     return next(new AppError(`Failed to create user or household: ${err.message}`, 500));
@@ -108,26 +108,26 @@ export const login = asyncHandler(async (req: Request, res: Response, next: Next
   if (!isPasswordCorrect) {
     return next(new AppError('Incorrect email or password.', 401));
   }
-  
+
   // 3. CRITICAL: Find a Household where this FamilyMember is a 'Parent'
   const parentId: Types.ObjectId = familyMember._id as Types.ObjectId;
-  
+
   const household = await Household.findOne({
-      'memberProfiles.familyMemberId': parentId,
-      'memberProfiles.role': 'Parent', //
+    'memberProfiles.familyMemberId': parentId,
+    'memberProfiles.role': 'Parent', //
   });
-  
+
   if (!household) {
     return next(new AppError('User does not belong to any household as a Parent.', 401));
   }
-  
+
   // FIX: Explicitly cast _id to resolve 'unknown' type
   const primaryHouseholdId: Types.ObjectId = household._id as Types.ObjectId;
 
   // 4. Generate JWT
   const token = signToken(
-      parentId.toString(), 
-      primaryHouseholdId.toString()
+    parentId.toString(),
+    primaryHouseholdId.toString()
   );
 
   res.status(200).json({
@@ -150,7 +150,7 @@ export const login = asyncHandler(async (req: Request, res: Response, next: Next
  */
 export const restrictTo = (...roles: Array<'Parent' | 'Child'>) => {
   return asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    
+
     // 1. Check if user and householdId are attached by 'protect' middleware
     if (!req.user || !req.householdId) {
       return next(
@@ -160,25 +160,25 @@ export const restrictTo = (...roles: Array<'Parent' | 'Child'>) => {
         ),
       );
     }
-    
+
     // 2. Fetch the household from the database using the ID from the token
     const currentHousehold = await Household.findById(req.householdId);
-    
+
     if (!currentHousehold) {
-        return next(
-            new AppError(
-              'Role check failed: The household associated with your token no longer exists.',
-              401,
-            ),
-          );
+      return next(
+        new AppError(
+          'Role check failed: The household associated with your token no longer exists.',
+          401,
+        ),
+      );
     }
 
     // 3. Find the user's profile *within* that household
     // FIX APPLIED HERE: Cast req.user!._id to Types.ObjectId
     const userHouseholdProfile = currentHousehold.memberProfiles.find(
-        (member) => member.familyMemberId.equals(req.user!._id as Types.ObjectId)
+      (member) => member.familyMemberId.equals(req.user!._id as Types.ObjectId)
     );
-    
+
     // 4. Check if the profile exists and their role is allowed
     if (!userHouseholdProfile || !roles.includes(userHouseholdProfile.role)) {
       return next(
@@ -198,11 +198,11 @@ export const restrictTo = (...roles: Array<'Parent' | 'Child'>) => {
  * Protected route for testing
  */
 export const getMe = (req: AuthenticatedRequest, res: Response): void => {
-    res.status(200).json({
-        status: 'success',
-        data: {
-            user: req.user,
-            householdId: req.householdId, // This is the context ID from the JWT
-        },
-    });
+  res.status(200).json({
+    status: 'success',
+    data: {
+      user: req.user,
+      householdId: req.householdId, // This is the context ID from the JWT
+    },
+  });
 };

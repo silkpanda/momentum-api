@@ -1,10 +1,10 @@
 // src/utils/errorHandler.ts
 import { Request, Response, NextFunction } from 'express';
-import AppError from './AppError';
+import AppError from './appError';
 
 // Global error handler middleware
 // CHANGED TO NAMED EXPORT: export const globalErrorHandler
-export const globalErrorHandler = ( 
+export const globalErrorHandler = (
   err: any,
   req: Request,
   res: Response,
@@ -29,10 +29,10 @@ export const globalErrorHandler = (
     status: 'error',
     message: 'Something went wrong on the server.',
     // In development, provide more detail
-    ...(process.env.NODE_ENV === 'development' && { 
-        error: err, 
-        message: err.message, 
-        stack: err.stack 
+    ...(process.env.NODE_ENV === 'development' && {
+      error: err,
+      message: err.message,
+      stack: err.stack
     }),
   });
 };

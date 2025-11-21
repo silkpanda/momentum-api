@@ -10,7 +10,7 @@ const Household_1 = __importDefault(require("../models/Household"));
 const FamilyMember_1 = __importDefault(require("../models/FamilyMember"));
 const Task_1 = __importDefault(require("../models/Task")); // Required for cleanup
 const StoreItem_1 = __importDefault(require("../models/StoreItem")); // Required for cleanup
-const AppError_1 = __importDefault(require("../utils/AppError"));
+const appError_1 = __importDefault(require("../utils/appError"));
 /**
  * @desc    Create a new household
  * @route   POST /api/households
@@ -20,10 +20,10 @@ exports.createHousehold = (0, express_async_handler_1.default)(async (req, res) 
     const { householdName, userDisplayName, userProfileColor } = req.body;
     const creatorFamilyMemberId = req.user?._id;
     if (!creatorFamilyMemberId) {
-        throw new AppError_1.default('Authentication error. User not found.', 401);
+        throw new appError_1.default('Authentication error. User not found.', 401);
     }
     if (!householdName || !userDisplayName || !userProfileColor) {
-        throw new AppError_1.default('Missing required fields: householdName, userDisplayName, and userProfileColor are all required.', 400);
+        throw new appError_1.default('Missing required fields: householdName, userDisplayName, and userProfileColor are all required.', 400);
     }
     const creatorProfile = {
         familyMemberId: creatorFamilyMemberId,
@@ -46,14 +46,14 @@ exports.createHousehold = (0, express_async_handler_1.default)(async (req, res) 
 exports.getMyHouseholds = (0, express_async_handler_1.default)(async (req, res) => {
     const householdId = req.householdId;
     if (!householdId) {
-        throw new AppError_1.default('Household context not found in session token.', 401);
+        throw new appError_1.default('Household context not found in session token.', 401);
     }
     const household = await Household_1.default.findById(householdId).populate({
         path: 'memberProfiles.familyMemberId',
         select: 'firstName email',
     });
     if (!household) {
-        throw new AppError_1.default('Primary household not found.', 404);
+        throw new appError_1.default('Primary household not found.', 404);
     }
     res.status(200).json({
         status: 'success',
@@ -69,7 +69,7 @@ exports.getHousehold = (0, express_async_handler_1.default)(async (req, res) => 
     const { id } = req.params;
     const userId = req.user?._id;
     if (!userId) {
-        throw new AppError_1.default('Authentication error. User not found.', 401);
+        throw new appError_1.default('Authentication error. User not found.', 401);
     }
     // Fetch and populate (transforms familyMemberId into an Object)
     const household = await Household_1.default.findById(id).populate({
@@ -77,7 +77,7 @@ exports.getHousehold = (0, express_async_handler_1.default)(async (req, res) => 
         select: 'firstName email',
     });
     if (!household) {
-        throw new AppError_1.default('Household not found.', 404);
+        throw new appError_1.default('Household not found.', 404);
     }
     // FIX: Handle the populated object correctly
     const isMember = household.memberProfiles.some((p) => {
@@ -89,7 +89,7 @@ exports.getHousehold = (0, express_async_handler_1.default)(async (req, res) => 
         return memberId.toString() === userId.toString();
     });
     if (!isMember) {
-        throw new AppError_1.default('You are not a member of this household.', 403);
+        throw new appError_1.default('You are not a member of this household.', 403);
     }
     res.status(200).json({
         status: 'success',
@@ -106,20 +106,20 @@ exports.updateHousehold = (0, express_async_handler_1.default)(async (req, res) 
     const { householdName } = req.body;
     const userId = req.user?._id;
     if (!userId) {
-        throw new AppError_1.default('Authentication error. User not found.', 401);
+        throw new appError_1.default('Authentication error. User not found.', 401);
     }
     if (!householdName) {
-        throw new AppError_1.default('householdName is required for update.', 400);
+        throw new appError_1.default('householdName is required for update.', 400);
     }
     // Note: No populate here, so familyMemberId remains an ObjectId
     const household = await Household_1.default.findById(id);
     if (!household) {
-        throw new AppError_1.default('Household not found.', 404);
+        throw new appError_1.default('Household not found.', 404);
     }
     // Authorization: Only a Parent of THIS household can update it
     const memberProfile = household.memberProfiles.find((p) => p.familyMemberId.toString() === userId.toString());
     if (!memberProfile || memberProfile.role !== 'Parent') {
-        throw new AppError_1.default('Unauthorized. Only Parents can update household details.', 403);
+        throw new appError_1.default('Unauthorized. Only Parents can update household details.', 403);
     }
     household.householdName = householdName;
     await household.save();
@@ -137,16 +137,16 @@ exports.deleteHousehold = (0, express_async_handler_1.default)(async (req, res) 
     const { id } = req.params;
     const userId = req.user?._id;
     if (!userId) {
-        throw new AppError_1.default('Authentication error. User not found.', 401);
+        throw new appError_1.default('Authentication error. User not found.', 401);
     }
     const household = await Household_1.default.findById(id);
     if (!household) {
-        throw new AppError_1.default('Household not found.', 404);
+        throw new appError_1.default('Household not found.', 404);
     }
     // Authorization: Only a Parent of THIS household can delete it
     const memberProfile = household.memberProfiles.find((p) => p.familyMemberId.toString() === userId.toString());
     if (!memberProfile || memberProfile.role !== 'Parent') {
-        throw new AppError_1.default('Unauthorized. Only Parents can delete a household.', 403);
+        throw new appError_1.default('Unauthorized. Only Parents can delete a household.', 403);
     }
     // Cascade Delete: Clean up related data
     await Task_1.default.deleteMany({ householdRefId: id });
@@ -167,16 +167,16 @@ exports.addMemberToHousehold = (0, express_async_handler_1.default)(async (req, 
     let { familyMemberId, firstName, displayName, profileColor, role } = req.body;
     const loggedInUserId = req.user?._id;
     if (!loggedInUserId) {
-        throw new AppError_1.default('Authentication error. User not found.', 401);
+        throw new appError_1.default('Authentication error. User not found.', 401);
     }
     if (!displayName || !profileColor || !role) {
         if (!familyMemberId && (!firstName || !role)) {
-            throw new AppError_1.default('Missing required fields: displayName, profileColor, and role are required. For new members, firstName is also required.', 400);
+            throw new appError_1.default('Missing required fields: displayName, profileColor, and role are required. For new members, firstName is also required.', 400);
         }
     }
     if (!familyMemberId) {
         if (role !== 'Child') {
-            throw new AppError_1.default('Only the "Child" role can be created through this endpoint without a familyMemberId.', 400);
+            throw new appError_1.default('Only the "Child" role can be created through this endpoint without a familyMemberId.', 400);
         }
         const newChild = await FamilyMember_1.default.create({
             firstName,
@@ -188,20 +188,20 @@ exports.addMemberToHousehold = (0, express_async_handler_1.default)(async (req, 
     }
     const household = await Household_1.default.findById(householdId);
     if (!household) {
-        throw new AppError_1.default('Household not found.', 404);
+        throw new appError_1.default('Household not found.', 404);
     }
     const isParent = household.memberProfiles.some((member) => member.familyMemberId.equals(loggedInUserId) &&
         member.role === 'Parent');
     if (!isParent) {
-        throw new AppError_1.default('Unauthorized. Only parents of this household can add new members.', 403);
+        throw new appError_1.default('Unauthorized. Only parents of this household can add new members.', 403);
     }
     const isAlreadyMember = household.memberProfiles.some((member) => member.familyMemberId.equals(familyMemberId));
     if (isAlreadyMember) {
-        throw new AppError_1.default('This family member is already in the household.', 400);
+        throw new appError_1.default('This family member is already in the household.', 400);
     }
     const memberExists = await FamilyMember_1.default.findById(familyMemberId);
     if (!memberExists) {
-        throw new AppError_1.default('No family member found with the provided ID.', 404);
+        throw new appError_1.default('No family member found with the provided ID.', 404);
     }
     const newMemberProfile = {
         familyMemberId: new mongoose_1.Types.ObjectId(familyMemberId),
@@ -235,20 +235,20 @@ exports.updateMemberProfile = (0, express_async_handler_1.default)(async (req, r
     const { displayName, profileColor, role } = req.body;
     const loggedInUserId = req.user?._id;
     if (!loggedInUserId) {
-        throw new AppError_1.default('Authentication error. User not found.', 401);
+        throw new appError_1.default('Authentication error. User not found.', 401);
     }
     const household = await Household_1.default.findById(householdId);
     if (!household) {
-        throw new AppError_1.default('Household not found.', 404);
+        throw new appError_1.default('Household not found.', 404);
     }
     const isParent = household.memberProfiles.some((member) => member.familyMemberId.equals(loggedInUserId) &&
         member.role === 'Parent');
     if (!isParent) {
-        throw new AppError_1.default('Unauthorized. Only parents of this household can update members.', 403);
+        throw new appError_1.default('Unauthorized. Only parents of this household can update members.', 403);
     }
     const memberProfile = household.memberProfiles.find((member) => member._id.equals(memberProfileId));
     if (!memberProfile) {
-        throw new AppError_1.default('Member profile not found in this household.', 404);
+        throw new appError_1.default('Member profile not found in this household.', 404);
     }
     if (displayName)
         memberProfile.displayName = displayName;
@@ -268,25 +268,25 @@ exports.removeMemberFromHousehold = (0, express_async_handler_1.default)(async (
     const { householdId, memberProfileId } = req.params;
     const loggedInUserId = req.user?._id;
     if (!loggedInUserId) {
-        throw new AppError_1.default('Authentication error. User not found.', 401);
+        throw new appError_1.default('Authentication error. User not found.', 401);
     }
     const household = await Household_1.default.findById(householdId);
     if (!household) {
-        throw new AppError_1.default('Household not found.', 404);
+        throw new appError_1.default('Household not found.', 404);
     }
     const isParent = household.memberProfiles.some((member) => member.familyMemberId.equals(loggedInUserId) &&
         member.role === 'Parent');
     if (!isParent) {
-        throw new AppError_1.default('Unauthorized. Only parents of this household can remove members.', 403);
+        throw new appError_1.default('Unauthorized. Only parents of this household can remove members.', 403);
     }
     const memberToRemove = household.memberProfiles.find((member) => member._id.equals(memberProfileId));
     if (!memberToRemove) {
-        throw new AppError_1.default('Member profile not found in this household.', 404);
+        throw new appError_1.default('Member profile not found in this household.', 404);
     }
     if (memberToRemove.role === 'Parent') {
         const parentCount = household.memberProfiles.filter((m) => m.role === 'Parent').length;
         if (parentCount <= 1) {
-            throw new AppError_1.default('Cannot remove the last parent from a household.', 400);
+            throw new appError_1.default('Cannot remove the last parent from a household.', 400);
         }
     }
     household.memberProfiles = household.memberProfiles.filter((member) => !member._id.equals(memberProfileId));
@@ -312,10 +312,10 @@ exports.getInviteCode = (0, express_async_handler_1.default)(async (req, res) =>
     const userId = req.user?._id;
     const household = await Household_1.default.findById(id);
     if (!household)
-        throw new AppError_1.default('Household not found', 404);
+        throw new appError_1.default('Household not found', 404);
     const isParent = household.memberProfiles.some((p) => p.familyMemberId.toString() === userId.toString() && p.role === 'Parent');
     if (!isParent)
-        throw new AppError_1.default('Unauthorized', 403);
+        throw new appError_1.default('Unauthorized', 403);
     if (!household.inviteCode) {
         household.inviteCode = generateCode();
         await household.save();
@@ -332,10 +332,10 @@ exports.regenerateInviteCode = (0, express_async_handler_1.default)(async (req, 
     const userId = req.user?._id;
     const household = await Household_1.default.findById(id);
     if (!household)
-        throw new AppError_1.default('Household not found', 404);
+        throw new appError_1.default('Household not found', 404);
     const isParent = household.memberProfiles.some((p) => p.familyMemberId.toString() === userId.toString() && p.role === 'Parent');
     if (!isParent)
-        throw new AppError_1.default('Unauthorized', 403);
+        throw new appError_1.default('Unauthorized', 403);
     household.inviteCode = generateCode();
     await household.save();
     res.status(200).json({ inviteCode: household.inviteCode });
@@ -350,13 +350,13 @@ exports.joinHousehold = (0, express_async_handler_1.default)(async (req, res) =>
     const userId = req.user?._id;
     const user = req.user;
     if (!inviteCode)
-        throw new AppError_1.default('Invite code is required', 400);
+        throw new appError_1.default('Invite code is required', 400);
     const household = await Household_1.default.findOne({ inviteCode: inviteCode.toUpperCase() });
     if (!household)
-        throw new AppError_1.default('Invalid invite code', 404);
+        throw new appError_1.default('Invalid invite code', 404);
     const isMember = household.memberProfiles.some((p) => p.familyMemberId.toString() === userId.toString());
     if (isMember)
-        throw new AppError_1.default('You are already a member of this household', 400);
+        throw new appError_1.default('You are already a member of this household', 400);
     const newProfile = {
         familyMemberId: userId,
         displayName: user?.firstName || 'New Member',

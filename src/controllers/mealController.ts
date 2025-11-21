@@ -2,7 +2,7 @@ import { Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import { Types } from 'mongoose';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import AppError from '../utils/AppError';
+import AppError from '../utils/appError';
 import Recipe from '../models/Recipe';
 import Restaurant from '../models/Restaurant';
 import MealPlan from '../models/MealPlan';
