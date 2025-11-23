@@ -4,7 +4,11 @@ export interface IRestaurant extends Document {
     householdId: Types.ObjectId;
     name: string;
     cuisine?: string;
-    location?: string;
+    address?: string;
+    location?: string; // Kept for backwards compatibility
+    phone?: string;
+    website?: string;
+    priceRange?: string;
     favoriteOrders: {
         itemName: string;
         forMemberId?: Types.ObjectId;
@@ -29,9 +33,25 @@ const RestaurantSchema = new Schema<IRestaurant>(
             type: String,
             trim: true,
         },
+        address: {
+            type: String,
+            trim: true,
+        },
         location: {
             type: String,
             trim: true,
+        },
+        phone: {
+            type: String,
+            trim: true,
+        },
+        website: {
+            type: String,
+            trim: true,
+        },
+        priceRange: {
+            type: String,
+            enum: ['$', '$$', '$$$', '$$$$'],
         },
         favoriteOrders: [
             {
