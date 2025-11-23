@@ -333,7 +333,7 @@ export const addMemberToHousehold = asyncHandler(
 export const updateMemberProfile = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { householdId, memberProfileId } = req.params;
-    const { displayName, profileColor, role } = req.body;
+    const { displayName, profileColor, role, focusedTaskId } = req.body;
 
     const loggedInUserId = req.user?._id as Types.ObjectId;
 
@@ -371,6 +371,7 @@ export const updateMemberProfile = asyncHandler(
     if (displayName) memberProfile.displayName = displayName;
     if (profileColor) memberProfile.profileColor = profileColor;
     if (role) memberProfile.role = role;
+    if (focusedTaskId !== undefined) memberProfile.focusedTaskId = focusedTaskId;
 
     await household.save();
 

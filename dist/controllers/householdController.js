@@ -237,7 +237,7 @@ exports.addMemberToHousehold = (0, express_async_handler_1.default)(async (req, 
  */
 exports.updateMemberProfile = (0, express_async_handler_1.default)(async (req, res) => {
     const { householdId, memberProfileId } = req.params;
-    const { displayName, profileColor, role } = req.body;
+    const { displayName, profileColor, role, focusedTaskId } = req.body;
     const loggedInUserId = req.user?._id;
     if (!loggedInUserId) {
         throw new AppError_1.default('Authentication error. User not found.', 401);
@@ -261,6 +261,8 @@ exports.updateMemberProfile = (0, express_async_handler_1.default)(async (req, r
         memberProfile.profileColor = profileColor;
     if (role)
         memberProfile.role = role;
+    if (focusedTaskId !== undefined)
+        memberProfile.focusedTaskId = focusedTaskId;
     await household.save();
     // Emit real-time update
     server_1.io.emit('household_updated', { type: 'member_update', householdId, memberProfile });

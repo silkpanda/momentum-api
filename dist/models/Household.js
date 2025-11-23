@@ -28,6 +28,11 @@ const HouseholdMemberProfileSchema = new mongoose_1.Schema({
         default: 0,
         min: 0,
     },
+    focusedTaskId: {
+        type: mongoose_1.Schema.Types.ObjectId,
+        ref: 'Task',
+        default: null,
+    },
 }, {
     // This setting ensures Mongoose auto-generates the '_id' for this sub-document
     _id: true

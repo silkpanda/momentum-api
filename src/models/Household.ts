@@ -10,6 +10,7 @@ export interface IHouseholdMemberProfile {
   profileColor: string;         // Household-specific color from the palette
   role: 'Parent' | 'Child';     // Role *within* this household
   pointsTotal?: number;         // FIX: Made optional, as schema provides a default of 0
+  focusedTaskId?: Types.ObjectId; // ADHD Feature: When set, child sees only this task in Focus Mode
 }
 
 // Interface for the main Household document
@@ -47,6 +48,11 @@ const HouseholdMemberProfileSchema = new Schema<IHouseholdMemberProfile>({
     type: Number,
     default: 0,
     min: 0,
+  },
+  focusedTaskId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Task',
+    default: null,
   },
 }, {
   // This setting ensures Mongoose auto-generates the '_id' for this sub-document
