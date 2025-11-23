@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteStoreItem = exports.updateStoreItem = exports.getStoreItem = exports.createStoreItem = exports.getAllStoreItems = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const StoreItem_1 = __importDefault(require("../models/StoreItem"));
+const server_1 = require("../server"); // Import Socket.io instance
 // Helper to handle standard model CRUD response
 const handleResponse = (res, status, message, data) => {
     res.status(status).json({
@@ -66,6 +67,8 @@ const createStoreItem = async (req, res) => {
             isAvailable,
             householdRefId: householdId, // CRITICAL: Scope item to the Household
         });
+        // Emit real-time update
+        server_1.io.emit('store_item_updated', { type: 'create', storeItem: newItem });
         handleResponse(res, 201, 'Store item created successfully.', newItem);
     }
     catch (err) {
@@ -123,6 +126,8 @@ const updateStoreItem = async (req, res) => {
             handleResponse(res, 404, 'Store item not found or does not belong to your household.');
             return;
         }
+        // Emit real-time update
+        server_1.io.emit('store_item_updated', { type: 'update', storeItem: updatedItem });
         handleResponse(res, 200, 'Store item updated successfully.', updatedItem);
     }
     catch (err) {
@@ -154,6 +159,8 @@ const deleteStoreItem = async (req, res) => {
             handleResponse(res, 404, 'Store item not found or does not belong to your household.');
             return;
         }
+        // Emit real-time update
+        server_1.io.emit('store_item_updated', { type: 'delete', storeItemId: itemId });
         // Successful deletion returns 204 No Content
         res.status(204).json({
             status: 'success',

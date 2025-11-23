@@ -11,6 +11,7 @@ const FamilyMember_1 = __importDefault(require("../models/FamilyMember"));
 const Task_1 = __importDefault(require("../models/Task")); // Required for cleanup
 const StoreItem_1 = __importDefault(require("../models/StoreItem")); // Required for cleanup
 const AppError_1 = __importDefault(require("../utils/AppError"));
+const server_1 = require("../server"); // Import Socket.io instance
 /**
  * @desc    Create a new household
  * @route   POST /api/households
@@ -123,6 +124,8 @@ exports.updateHousehold = (0, express_async_handler_1.default)(async (req, res) 
     }
     household.householdName = householdName;
     await household.save();
+    // Emit real-time update
+    server_1.io.emit('household_updated', { type: 'update', householdId: id, householdName });
     res.status(200).json({
         status: 'success',
         data: household,
@@ -216,6 +219,8 @@ exports.addMemberToHousehold = (0, express_async_handler_1.default)(async (req, 
         path: 'memberProfiles.familyMemberId',
         select: 'firstName email',
     });
+    // Emit real-time update
+    server_1.io.emit('household_updated', { type: 'member_add', householdId, member: finalHousehold.memberProfiles.find((p) => p.familyMemberId.equals(familyMemberId)) });
     res.status(201).json({
         status: 'success',
         message: 'Member added to household successfully.',
@@ -257,6 +262,8 @@ exports.updateMemberProfile = (0, express_async_handler_1.default)(async (req, r
     if (role)
         memberProfile.role = role;
     await household.save();
+    // Emit real-time update
+    server_1.io.emit('household_updated', { type: 'member_update', householdId, memberProfile });
     res.status(200).json(household);
 });
 /**
@@ -291,6 +298,8 @@ exports.removeMemberFromHousehold = (0, express_async_handler_1.default)(async (
     }
     household.memberProfiles = household.memberProfiles.filter((member) => !member._id.equals(memberProfileId));
     await household.save();
+    // Emit real-time update
+    server_1.io.emit('household_updated', { type: 'member_remove', householdId, memberProfileId });
     res.status(200).json(household);
 });
 // --- INVITE SYSTEM ---

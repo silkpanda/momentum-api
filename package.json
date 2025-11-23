@@ -9,7 +9,7 @@
     "dev": "nodemon src/server.ts",
     "tunnel": "npx ngrok http 3000",
     "dev:tunnel": "concurrently npm:dev npm:tunnel",
-    "build": "rm -rf dist && tsc",
+    "build": "rimraf dist && tsc",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "format": "prettier --write \"{src,test}/**/*.ts\"",
     "test": "echo \"Error: no test specified\" && exit 1"

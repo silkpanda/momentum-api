@@ -5,34 +5,41 @@ import AppError from './AppError';
 // Global error handler middleware
 // CHANGED TO NAMED EXPORT: export const globalErrorHandler
 export const globalErrorHandler = (
-  err: any,
+  err: unknown,
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
-  // Check if it's an operational error (created with AppError class)
+  // 1. Handle AppError (Operational, trusted errors)
   if (err instanceof AppError) {
-    // Operational error: send the custom status code and message
     return res.status(err.statusCode).json({
       status: err.status,
       message: err.message,
-      // Only include the stack trace if not in production
       ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
     });
   }
 
-  // Non-operational or unhandled error (e.g., database connection failure, programming error)
-  // Send a generic 500 response in production for security.
-  console.error('ERROR (Unhandled):', err); // Log the unhandled error for server inspection
+  // 2. Handle Mongoose/MongoDB Errors (CastError, ValidationError, DuplicateKey)
+  // These often come as generic objects, so we might need to cast or inspect them.
+  // For now, we'll treat them as generic 500s unless we specifically handle them,
+  // but we'll log them safely.
 
+  // 3. Handle Generic/Unknown Errors
+  console.error('ERROR (Unhandled):', err);
+
+  // In development, send the full error details
+  if (process.env.NODE_ENV === 'development') {
+    return res.status(500).json({
+      status: 'error',
+      message: 'Something went wrong on the server.',
+      error: err,
+      stack: (err as Error).stack, // Safe cast if it's an Error object
+    });
+  }
+
+  // In production, send a generic message
   return res.status(500).json({
     status: 'error',
     message: 'Something went wrong on the server.',
-    // In development, provide more detail
-    ...(process.env.NODE_ENV === 'development' && {
-      error: err,
-      message: err.message,
-      stack: err.stack
-    }),
   });
 };
