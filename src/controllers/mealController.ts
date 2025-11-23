@@ -41,7 +41,7 @@ export const deleteRecipe = asyncHandler(async (req: AuthenticatedRequest, res: 
     const { id } = req.params;
     const recipe = await Recipe.findOneAndDelete({ _id: id, householdId: req.householdId });
     if (!recipe) throw new AppError('Recipe not found', 404);
-    res.status(204).json({ status: 'success', data: null });
+    res.status(200).json({ status: 'success', message: 'Recipe deleted successfully' });
 });
 
 // --- RESTAURANTS ---
@@ -81,7 +81,7 @@ export const deleteRestaurant = asyncHandler(async (req: AuthenticatedRequest, r
     const { id } = req.params;
     const restaurant = await Restaurant.findOneAndDelete({ _id: id, householdId: req.householdId });
     if (!restaurant) throw new AppError('Restaurant not found', 404);
-    res.status(204).json({ status: 'success', data: null });
+    res.status(200).json({ status: 'success', message: 'Restaurant deleted successfully' });
 });
 
 // --- MEAL PLANS ---
