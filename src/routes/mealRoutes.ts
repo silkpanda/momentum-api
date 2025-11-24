@@ -12,6 +12,8 @@ import {
     getMealPlans,
     createMealPlan,
     deleteMealPlan,
+    addMealToPlan,
+    removeMealFromPlan,
 } from '../controllers/mealController';
 
 const router = express.Router();
@@ -40,5 +42,11 @@ router.route('/plans')
     .post(createMealPlan);
 router.route('/plans/:id')
     .delete(deleteMealPlan);
+
+router.route('/plans/:planId/meals')
+    .post(addMealToPlan);
+
+router.route('/plans/:planId/meals/:mealId')
+    .delete(removeMealFromPlan);
 
 export default router;

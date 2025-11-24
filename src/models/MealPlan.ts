@@ -9,6 +9,7 @@ export interface IMealPlan extends Document {
     customTitle?: string; // If itemType is Custom
     createdAt: Date;
     updatedAt: Date;
+    weeklyMealPlanId?: Types.ObjectId;
 }
 
 const MealPlanSchema = new Schema<IMealPlan>(
@@ -39,6 +40,11 @@ const MealPlanSchema = new Schema<IMealPlan>(
         customTitle: {
             type: String,
             trim: true,
+        },
+        weeklyMealPlanId: {
+            type: Schema.Types.ObjectId,
+            ref: 'WeeklyMealPlan',
+            required: false,
         },
     },
     {

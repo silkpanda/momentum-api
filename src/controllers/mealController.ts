@@ -6,6 +6,7 @@ import AppError from '../utils/AppError';
 import Recipe from '../models/Recipe';
 import Restaurant from '../models/Restaurant';
 import MealPlan from '../models/MealPlan';
+import WeeklyMealPlan from '../models/WeeklyMealPlan';
 
 // --- RECIPES ---
 
@@ -88,33 +89,74 @@ export const deleteRestaurant = asyncHandler(async (req: AuthenticatedRequest, r
 
 export const getMealPlans = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const householdId = req.householdId;
-    const { startDate, endDate } = req.query;
 
-    const query: any = { householdId };
-    if (startDate && endDate) {
-        query.date = { $gte: new Date(startDate as string), $lte: new Date(endDate as string) };
-    }
+    // 1. Fetch all Weekly Plans for this household
+    const weeklyPlans = await WeeklyMealPlan.find({ householdId }).sort({ startDate: -1 });
 
-    const mealPlans = await MealPlan.find(query)
-        .populate('itemId') // Will populate from Recipe or Restaurant based on refPath
-        .sort({ date: 1 });
+    // 2. For each weekly plan, fetch its meals
+    const plansWithMeals = await Promise.all(weeklyPlans.map(async (plan) => {
+        const meals = await MealPlan.find({ weeklyMealPlanId: plan._id }).populate('itemId');
+        return {
+            ...plan.toObject(),
+            meals
+        };
+    }));
 
-    res.status(200).json({ status: 'success', data: { mealPlans } });
+    res.status(200).json({ status: 'success', data: { mealPlans: plansWithMeals } });
 });
 
 export const createMealPlan = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const householdId = req.householdId;
-    const mealPlan = await MealPlan.create({ ...req.body, householdId });
+    const { startDate, endDate } = req.body;
 
-    // Populate immediately for UI convenience
-    await mealPlan.populate('itemId');
+    // Create the Weekly Container
+    const weeklyPlan = await WeeklyMealPlan.create({
+        householdId,
+        startDate,
+        endDate
+    });
 
-    res.status(201).json({ status: 'success', data: { mealPlan } });
+    res.status(201).json({ status: 'success', data: { mealPlan: { ...weeklyPlan.toObject(), meals: [] } } });
+});
+
+export const addMealToPlan = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const householdId = req.householdId;
+    const { planId } = req.params;
+
+    const weeklyPlan = await WeeklyMealPlan.findOne({ _id: planId, householdId });
+    if (!weeklyPlan) throw new AppError('Weekly plan not found', 404);
+
+    const meal = await MealPlan.create({
+        ...req.body,
+        householdId,
+        weeklyMealPlanId: planId
+    });
+
+    await meal.populate('itemId');
+
+    res.status(201).json({ status: 'success', data: { meal } });
+});
+
+export const removeMealFromPlan = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { planId, mealId } = req.params;
+    // Verify ownership via householdId is handled by findOneAndDelete
+    const meal = await MealPlan.findOneAndDelete({ _id: mealId, householdId: req.householdId, weeklyMealPlanId: planId });
+
+    if (!meal) throw new AppError('Meal not found', 404);
+
+    res.status(204).json({ status: 'success', data: null });
 });
 
 export const deleteMealPlan = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     const { id } = req.params;
-    const mealPlan = await MealPlan.findOneAndDelete({ _id: id, householdId: req.householdId });
-    if (!mealPlan) throw new AppError('Meal plan not found', 404);
+
+    // Delete the weekly plan
+    const weeklyPlan = await WeeklyMealPlan.findOneAndDelete({ _id: id, householdId: req.householdId });
+
+    if (!weeklyPlan) throw new AppError('Meal plan not found', 404);
+
+    // Delete all associated meals
+    await MealPlan.deleteMany({ weeklyMealPlanId: id });
+
     res.status(204).json({ status: 'success', data: null });
 });
