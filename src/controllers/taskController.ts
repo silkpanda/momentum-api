@@ -223,21 +223,54 @@ export const completeTask = asyncHandler(
       throw new AppError('This member is not assigned to this task.', 403);
     }
 
-    // 5. Update the task status
-    task.status = 'PendingApproval';
-    task.completedBy = memberProfile!._id as Types.ObjectId; // Track who completed it
-    await task.save();
+    // 5. Check if the completing member is a Parent
+    const isParent = memberProfile.role === 'Parent';
 
-    // Emit real-time update
-    io.emit('task_updated', { type: 'update', task });
+    if (isParent) {
+      // Parents auto-approve their own tasks
+      // Award points immediately and mark as Approved
+      memberProfile.pointsTotal = (memberProfile.pointsTotal || 0) + task.pointsValue;
+      await household.save();
 
-    res.status(200).json({
-      status: 'success',
-      message: 'Task marked for approval.',
-      data: {
+      task.status = 'Approved';
+      task.completedBy = memberProfile._id as Types.ObjectId;
+      await task.save();
+
+      // Emit real-time update with member points
+      io.emit('task_updated', {
+        type: 'update',
         task,
-      },
-    });
+        memberUpdate: {
+          memberId: memberProfile._id,
+          pointsTotal: memberProfile.pointsTotal
+        }
+      });
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Task completed and points awarded.',
+        data: {
+          task,
+          updatedProfile: memberProfile,
+        },
+      });
+    } else {
+      // Children require approval
+      task.status = 'PendingApproval';
+      task.completedBy = memberProfile!._id as Types.ObjectId;
+      await task.save();
+
+      // Emit real-time update
+      io.emit('task_updated', { type: 'update', task });
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Task marked for approval.',
+        data: {
+          task,
+        },
+      });
+    }
   },
 );
 
