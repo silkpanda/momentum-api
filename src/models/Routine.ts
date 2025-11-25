@@ -1,81 +1,104 @@
-import mongoose, { Schema, Document } from 'mongoose';
+// src/models/Routine.ts
+import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export interface IRoutineStep {
+// Individual routine item (e.g., "Brush teeth", "Pack backpack")
+export interface IRoutineItem {
+    _id?: Types.ObjectId;
     title: string;
-    description?: string;
-    durationSeconds?: number;
-    icon?: string;
+    order: number; // Display order in the list
+    isCompleted: boolean;
+    completedAt?: Date;
 }
 
+// Main Routine document
 export interface IRoutine extends Document {
-    householdId: mongoose.Types.ObjectId;
-    assignedTo: string; // Member ID
-
-    title: string;
-    description?: string;
-    icon: string;
-    color: string;
-
-    steps: IRoutineStep[];
-
-    schedule: {
-        days: string[]; // ['Mon', 'Tue', etc.]
-        startTime?: string; // "07:00"
-    };
-
-    pointsReward: number;
+    householdId: Types.ObjectId;
+    memberId: Types.ObjectId; // Which member this routine belongs to
+    timeOfDay: 'morning' | 'noon' | 'night';
+    title: string; // e.g., "Morning Routine", "After School Routine"
+    items: IRoutineItem[];
     isActive: boolean;
-
-    createdBy: mongoose.Types.ObjectId;
+    lastResetDate?: string; // ISO date string (YYYY-MM-DD) for tracking daily resets
+    createdBy: Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
 }
 
-const RoutineStepSchema = new Schema<IRoutineStep>({
-    title: { type: String, required: true },
-    description: { type: String },
-    durationSeconds: { type: Number },
-    icon: { type: String, default: 'checkbox' }
-});
-
-const RoutineSchema = new Schema<IRoutine>({
-    householdId: {
-        type: Schema.Types.ObjectId,
-        ref: 'Household',
-        required: true
-    },
-    assignedTo: {
-        type: String,
-        required: true
-    },
+// Sub-schema for routine items
+const RoutineItemSchema = new Schema<IRoutineItem>({
     title: {
         type: String,
+        required: [true, 'Routine item title is required'],
+        trim: true,
+    },
+    order: {
+        type: Number,
         required: true,
-        trim: true
+        default: 0,
     },
-    description: { type: String },
-    icon: { type: String, default: 'list' },
-    color: { type: String, default: '#4F46E5' },
-
-    steps: [RoutineStepSchema],
-
-    schedule: {
-        days: [{ type: String }],
-        startTime: { type: String }
+    isCompleted: {
+        type: Boolean,
+        default: false,
     },
-
-    pointsReward: { type: Number, default: 10 },
-    isActive: { type: Boolean, default: true },
-
-    createdBy: {
-        type: Schema.Types.ObjectId,
-        required: true
-    }
+    completedAt: {
+        type: Date,
+        default: null,
+    },
 }, {
-    timestamps: true
+    _id: true, // Auto-generate _id for each item
 });
 
-// Indexes
-RoutineSchema.index({ householdId: 1, assignedTo: 1 });
+// Main Routine Schema
+const RoutineSchema = new Schema<IRoutine>(
+    {
+        householdId: {
+            type: Schema.Types.ObjectId,
+            ref: 'Household',
+            required: [true, 'Household ID is required'],
+            index: true,
+        },
+        memberId: {
+            type: Schema.Types.ObjectId,
+            required: [true, 'Member ID is required'],
+            index: true,
+        },
+        timeOfDay: {
+            type: String,
+            enum: ['morning', 'noon', 'night'],
+            required: [true, 'Time of day is required'],
+            default: 'morning',
+        },
+        title: {
+            type: String,
+            required: [true, 'Routine title is required'],
+            trim: true,
+        },
+        items: {
+            type: [RoutineItemSchema],
+            default: [],
+        },
+        isActive: {
+            type: Boolean,
+            default: true,
+        },
+        lastResetDate: {
+            type: String,
+            default: null,
+        },
+        createdBy: {
+            type: Schema.Types.ObjectId,
+            required: true,
+        },
+    },
+    {
+        timestamps: true,
+        collection: 'routines',
+    },
+);
 
-export default mongoose.model<IRoutine>('Routine', RoutineSchema);
+// Compound index for efficient queries
+RoutineSchema.index({ householdId: 1, memberId: 1, timeOfDay: 1 });
+
+const Routine = mongoose.model<IRoutine>('Routine', RoutineSchema);
+
+export default Routine;
