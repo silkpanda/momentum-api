@@ -7,6 +7,7 @@ import Household from '../models/Household';
 import AppError from '../utils/AppError';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { io } from '../server'; // Import Socket.io instance
+import { updateMemberStreak, applyMultiplier } from '../utils/streakCalculator';
 
 /**
  * @desc    Create a new task
@@ -275,7 +276,7 @@ export const completeTask = asyncHandler(
 );
 
 /**
- * @desc    Approve a completed task (Parent only)
+ * @desc    Approve a completed task (Parent only) - WITH STREAK CALCULATION
  * @route   POST /api/tasks/:id/approve
  * @access  Private (Parent only)
  */
@@ -322,30 +323,72 @@ export const approveTask = asyncHandler(
       );
     }
 
-    // 4. Atomically update the member's points and save the task status
-    memberProfile.pointsTotal = (memberProfile.pointsTotal || 0) + task.pointsValue;
+    // 4. Check if all assigned tasks for this member are now complete (for streak calculation)
+    const allMemberTasks = await Task.find({
+      householdId: householdId,
+      assignedTo: memberProfile._id,
+      status: { $in: ['Pending', 'PendingApproval'] }
+    });
+
+    // After approving this task, check if any other tasks remain pending
+    const remainingPendingTasks = allMemberTasks.filter(t =>
+      !t._id.equals(taskId) // Exclude the task being approved
+    );
+
+    const allTasksComplete = remainingPendingTasks.length === 0;
+
+    // 5. Calculate streak if all tasks are complete
+    if (allTasksComplete) {
+      const streakUpdate = updateMemberStreak(
+        memberProfile.currentStreak || 0,
+        memberProfile.longestStreak || 0,
+        memberProfile.lastCompletionDate,
+        true
+      );
+
+      // Update member's streak data
+      memberProfile.currentStreak = streakUpdate.currentStreak;
+      memberProfile.longestStreak = streakUpdate.longestStreak;
+      memberProfile.lastCompletionDate = streakUpdate.lastCompletionDate;
+      memberProfile.streakMultiplier = streakUpdate.streakMultiplier;
+    }
+
+    // 6. Apply multiplier to points (only for assigned tasks, per spec)
+    const currentMultiplier = memberProfile.streakMultiplier || 1.0;
+    const pointsToAward = applyMultiplier(task.pointsValue, currentMultiplier);
+
+    // 7. Award points
+    memberProfile.pointsTotal = (memberProfile.pointsTotal || 0) + pointsToAward;
     await household.save();
 
     // Update task status
     task.status = 'Approved';
     await task.save();
 
-    // Emit real-time update with member points
+    // Emit real-time update with member points and streak data
     io.emit('task_updated', {
       type: 'update',
       task,
       memberUpdate: {
         memberId: memberProfile._id,
-        pointsTotal: memberProfile.pointsTotal
+        pointsTotal: memberProfile.pointsTotal,
+        currentStreak: memberProfile.currentStreak,
+        longestStreak: memberProfile.longestStreak,
+        streakMultiplier: memberProfile.streakMultiplier,
+        lastCompletionDate: memberProfile.lastCompletionDate,
       }
     });
 
     res.status(200).json({
       status: 'success',
-      message: 'Task approved and points awarded.',
+      message: `Task approved and ${pointsToAward} points awarded${currentMultiplier > 1.0 ? ` (${currentMultiplier}x multiplier!)` : ''}.`,
       data: {
         task,
         updatedProfile: memberProfile,
+        pointsAwarded: pointsToAward,
+        basePoints: task.pointsValue,
+        multiplier: currentMultiplier,
+        streakUpdated: allTasksComplete,
       },
     });
   },

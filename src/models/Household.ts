@@ -11,6 +11,12 @@ export interface IHouseholdMemberProfile {
   role: 'Parent' | 'Child';     // Role *within* this household
   pointsTotal?: number;         // FIX: Made optional, as schema provides a default of 0
   focusedTaskId?: Types.ObjectId; // ADHD Feature: When set, child sees only this task in Focus Mode
+
+  // Streak System (Gamification)
+  currentStreak?: number;       // Days of consecutive task completion
+  longestStreak?: number;       // Personal best streak
+  lastCompletionDate?: string;  // ISO date string for tracking (YYYY-MM-DD)
+  streakMultiplier?: number;    // Current point multiplier (1.0, 1.5, 2.0, etc.)
 }
 
 // Interface for the main Household document
@@ -53,6 +59,26 @@ const HouseholdMemberProfileSchema = new Schema<IHouseholdMemberProfile>({
     type: Schema.Types.ObjectId,
     ref: 'Task',
     default: null,
+  },
+  // Streak System fields
+  currentStreak: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  longestStreak: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  lastCompletionDate: {
+    type: String,
+    default: null,
+  },
+  streakMultiplier: {
+    type: Number,
+    default: 1.0,
+    min: 1.0,
   },
 }, {
   // This setting ensures Mongoose auto-generates the '_id' for this sub-document
