@@ -33,6 +33,26 @@ const HouseholdMemberProfileSchema = new mongoose_1.Schema({
         ref: 'Task',
         default: null,
     },
+    // Streak System fields
+    currentStreak: {
+        type: Number,
+        default: 0,
+        min: 0,
+    },
+    longestStreak: {
+        type: Number,
+        default: 0,
+        min: 0,
+    },
+    lastCompletionDate: {
+        type: String,
+        default: null,
+    },
+    streakMultiplier: {
+        type: Number,
+        default: 1.0,
+        min: 1.0,
+    },
 }, {
     // This setting ensures Mongoose auto-generates the '_id' for this sub-document
     _id: true

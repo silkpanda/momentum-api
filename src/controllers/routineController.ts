@@ -16,7 +16,7 @@ const checkAndResetRoutine = async (routine: any): Promise<void> => {
         // Reset all items to incomplete
         routine.items.forEach((item: any) => {
             item.isCompleted = false;
-            item.completedAt = null;
+            item.completedAt = undefined;
         });
         routine.lastResetDate = today;
         await routine.save();
@@ -42,7 +42,7 @@ export const createRoutine = asyncHandler(
             title: item.title,
             order: item.order !== undefined ? item.order : index,
             isCompleted: false,
-            completedAt: null,
+            completedAt: undefined,
         }));
 
         const routine = await Routine.create({
@@ -170,7 +170,7 @@ export const updateRoutine = asyncHandler(
                 title: item.title,
                 order: item.order !== undefined ? item.order : index,
                 isCompleted: item.isCompleted || false,
-                completedAt: item.completedAt || null,
+                completedAt: item.completedAt || undefined,
             }));
         }
 
@@ -235,7 +235,7 @@ export const toggleRoutineItem = asyncHandler(
 
         // Toggle completion
         item.isCompleted = !item.isCompleted;
-        item.completedAt = item.isCompleted ? new Date() : null;
+        item.completedAt = item.isCompleted ? new Date() : undefined;
 
         await routine.save();
 
@@ -282,7 +282,7 @@ export const resetRoutine = asyncHandler(
         // Reset all items
         routine.items.forEach((item: any) => {
             item.isCompleted = false;
-            item.completedAt = null;
+            item.completedAt = undefined;
         });
         routine.lastResetDate = new Date().toISOString().split('T')[0];
 

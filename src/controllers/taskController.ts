@@ -331,7 +331,7 @@ export const approveTask = asyncHandler(
     });
 
     // After approving this task, check if any other tasks remain pending
-    const remainingPendingTasks = allMemberTasks.filter(t =>
+    const remainingPendingTasks = allMemberTasks.filter((t: any) =>
       !t._id.equals(taskId) // Exclude the task being approved
     );
 
