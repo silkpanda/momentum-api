@@ -52,6 +52,64 @@ export const getMemberWishlist = async (req: Request, res: Response) => {
     }
 };
 
+// Get all wishlist items for a household
+export const getHouseholdWishlist = async (req: Request, res: Response) => {
+    try {
+        const { householdId } = req.params;
+        const { includePurchased } = req.query;
+
+        const query: any = { householdId };
+
+        // By default, only show unpurchased items
+        if (includePurchased !== 'true') {
+            query.isPurchased = false;
+        }
+
+        const wishlistItems = await WishlistItem.find(query)
+            .sort({ priority: -1, createdAt: -1 });
+
+        // We need to calculate progress for each item, which depends on the member's points.
+        // Fetch the household to get all members' points at once.
+        const household = await Household.findById(householdId);
+
+        if (!household) {
+            return res.status(404).json({
+                success: false,
+                message: 'Household not found'
+            });
+        }
+
+        // Create a map of memberId -> points for O(1) lookup
+        const memberPointsMap = new Map<string, number>();
+        household.memberProfiles.forEach((m: any) => {
+            memberPointsMap.set(m._id.toString(), m.pointsTotal || 0);
+        });
+
+        const itemsWithProgress = wishlistItems.map(item => {
+            const currentPoints = memberPointsMap.get(item.memberId.toString()) || 0;
+            return {
+                ...item.toObject(),
+                progress: Math.min(100, Math.round((currentPoints / item.pointsCost) * 100)),
+                canAfford: currentPoints >= item.pointsCost
+            };
+        });
+
+        res.json({
+            success: true,
+            data: {
+                wishlistItems: itemsWithProgress
+            }
+        });
+    } catch (error: any) {
+        console.error('Error fetching household wishlist:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch household wishlist',
+            error: error.message
+        });
+    }
+};
+
 // Create a new wishlist item
 export const createWishlistItem = async (req: Request, res: Response) => {
     try {

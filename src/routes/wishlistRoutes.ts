@@ -5,6 +5,7 @@
 import express from 'express';
 import {
     getMemberWishlist,
+    getHouseholdWishlist,
     createWishlistItem,
     updateWishlistItem,
     deleteWishlistItem,
@@ -16,6 +17,9 @@ const router = express.Router();
 
 // All routes require authentication
 router.use(protect);
+
+// Get household's wishlist (Optimized)
+router.get('/household/:householdId', getHouseholdWishlist);
 
 // Get member's wishlist
 router.get('/member/:memberId', getMemberWishlist);
