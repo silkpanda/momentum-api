@@ -1,7 +1,7 @@
 // src/routes/pin.ts
 import express from 'express';
 import { setupPin, verifyPin, changePin, getPinStatus } from '../controllers/pinController';
-import { protect } from '../middleware/auth';
+import { protect } from '../middleware/authMiddleware';
 
 const router = express.Router();
 

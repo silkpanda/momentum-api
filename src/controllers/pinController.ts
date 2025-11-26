@@ -1,7 +1,8 @@
 // src/controllers/pinController.ts
 import { Request, Response } from 'express';
 import FamilyMember from '../models/FamilyMember';
-import Household from '../models/Household';
+import Household, { IHouseholdMemberProfile } from '../models/Household';
+import { AuthenticatedRequest } from '../middleware/authMiddleware';
 
 /**
  * PIN Validation Rules
@@ -37,10 +38,10 @@ function validatePin(pin: string): { valid: boolean; message?: string } {
  * @desc    Set up PIN for a user (first time or reset)
  * @access  Private (requires authentication)
  */
-export const setupPin = async (req: Request, res: Response) => {
+export const setupPin = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { pin } = req.body;
-        const userId = req.user?.id;
+        const userId = req.user?._id;
 
         if (!userId) {
             return res.status(401).json({ status: 'error', message: 'Not authenticated' });
@@ -103,13 +104,14 @@ export const verifyPin = async (req: Request, res: Response) => {
         }
 
         // Find the member in the household
-        const member = household.members.find(m => m._id?.toString() === memberId);
+        // FIX: Use memberProfiles instead of members
+        const member = household.memberProfiles.find((m: IHouseholdMemberProfile) => m._id?.toString() === memberId);
         if (!member) {
             return res.status(404).json({ status: 'error', message: 'Member not found in household' });
         }
 
         // Get the FamilyMember document with PIN
-        const user = await FamilyMember.findById(member.userId).select('+pin');
+        const user = await FamilyMember.findById(member.familyMemberId).select('+pin');
         if (!user) {
             return res.status(404).json({ status: 'error', message: 'User not found' });
         }
@@ -140,7 +142,7 @@ export const verifyPin = async (req: Request, res: Response) => {
                 verified: true,
                 memberId: member._id,
                 userId: user._id,
-                firstName: member.firstName,
+                firstName: member.displayName, // Use displayName from household profile
                 role: member.role,
             },
         });
@@ -155,10 +157,10 @@ export const verifyPin = async (req: Request, res: Response) => {
  * @desc    Change existing PIN (requires old PIN)
  * @access  Private (requires authentication)
  */
-export const changePin = async (req: Request, res: Response) => {
+export const changePin = async (req: AuthenticatedRequest, res: Response) => {
     try {
         const { oldPin, newPin } = req.body;
-        const userId = req.user?.id;
+        const userId = req.user?._id;
 
         if (!userId) {
             return res.status(401).json({ status: 'error', message: 'Not authenticated' });
@@ -209,9 +211,9 @@ export const changePin = async (req: Request, res: Response) => {
  * @desc    Check if user has PIN set up
  * @access  Private (requires authentication)
  */
-export const getPinStatus = async (req: Request, res: Response) => {
+export const getPinStatus = async (req: AuthenticatedRequest, res: Response) => {
     try {
-        const userId = req.user?.id;
+        const userId = req.user?._id;
 
         if (!userId) {
             return res.status(401).json({ status: 'error', message: 'Not authenticated' });
