@@ -3,7 +3,6 @@ import { Request, Response, NextFunction } from 'express';
 import AppError from './AppError';
 
 // Global error handler middleware
-// CHANGED TO NAMED EXPORT: export const globalErrorHandler
 export const globalErrorHandler = (
   err: unknown,
   req: Request,
@@ -16,6 +15,21 @@ export const globalErrorHandler = (
       status: err.status,
       message: err.message,
       ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    });
+  }
+
+  // 1.5 Handle JWT Errors
+  if ((err as any).name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      status: 'fail',
+      message: 'Invalid token. Please log in again.',
+    });
+  }
+
+  if ((err as any).name === 'TokenExpiredError') {
+    return res.status(401).json({
+      status: 'fail',
+      message: 'Your token has expired! Please log in again.',
     });
   }
 
