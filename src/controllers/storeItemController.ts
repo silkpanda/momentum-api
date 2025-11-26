@@ -55,7 +55,7 @@ export const createStoreItem = async (req: AuthenticatedRequest, res: Response):
       householdRefId: householdId,
     });
     const io = req.app.get('io');
-    io.emit('store_item_updated', { type: 'create', storeItem: newItem });
+    io.to(householdId).emit('store_item_updated', { type: 'create', storeItem: newItem });
     handleResponse(res, 201, 'Store item created successfully.', newItem);
   } catch (err: any) {
     handleResponse(res, 500, 'Failed to create store item.', { error: err.message });
@@ -99,7 +99,7 @@ export const updateStoreItem = async (req: AuthenticatedRequest, res: Response):
       return;
     }
     const io = req.app.get('io');
-    io.emit('store_item_updated', { type: 'update', storeItem: updatedItem });
+    io.to(householdId).emit('store_item_updated', { type: 'update', storeItem: updatedItem });
     handleResponse(res, 200, 'Store item updated successfully.', updatedItem);
   } catch (err: any) {
     if (err instanceof mongoose.Error.CastError) {
@@ -121,7 +121,7 @@ export const deleteStoreItem = async (req: AuthenticatedRequest, res: Response):
       return;
     }
     const io = req.app.get('io');
-    io.emit('store_item_updated', { type: 'delete', storeItemId: itemId });
+    io.to(householdId).emit('store_item_updated', { type: 'delete', storeItemId: itemId });
     res.status(204).json({ status: 'success', data: null });
   } catch (err: any) {
     if (err instanceof mongoose.Error.CastError) {
