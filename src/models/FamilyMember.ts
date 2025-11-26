@@ -9,13 +9,20 @@ export interface IFamilyMember extends Document {
   firstName: string;
   lastName: string; // ADDED per v3 spec
   email: string;
-  
+
   // Authentication fields
   password: string; // Stored hash
   passwordChangedAt?: Date;
 
+  // PIN Authentication (4-digit, hashed)
+  pin?: string; // Stored hash (bcrypt)
+  pinSetupCompleted?: boolean; // Flag to track if user has set up PIN
+  lastPinVerification?: Date; // Timestamp of last successful PIN verification
+
   // Custom method signature for checking password
   comparePassword(candidatePassword: string): Promise<boolean>;
+  // Custom method signature for checking PIN
+  comparePin(candidatePin: string): Promise<boolean>;
 }
 
 // Schema definition
@@ -48,7 +55,18 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
       minlength: 8,
     },
     passwordChangedAt: Date, // Tracks last password update
-    
+
+    // PIN Authentication fields
+    pin: {
+      type: String,
+      select: false, // Ensures hash is not retrieved by default queries
+    },
+    pinSetupCompleted: {
+      type: Boolean,
+      default: false,
+    },
+    lastPinVerification: Date,
+
     // REMOVED 'role' and 'householdRefs' as they are no longer global.
     // Role and points are now managed *inside* the Household model.
   },
@@ -58,29 +76,32 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
   },
 );
 
-// Pre-save hook to hash the password before saving
-FamilyMemberSchema.pre('save', async function(next) {
-    // Only run this function if password was actually modified
-    if (!this.isModified('password')) return next();
-    
-    // Hash the password with cost factor
+// Pre-save hook to hash the password and PIN before saving
+FamilyMemberSchema.pre('save', async function (next) {
+  // Hash password if modified
+  if (this.isModified('password')) {
     this.password = await bcrypt.hash(this.password, BCRYPT_SALT_ROUNDS);
-    
     // Update the password change timestamp (used for invalidating old JWTs)
     // Set it 1 second in the past to ensure JWT is created *after* this timestamp
-    this.passwordChangedAt = new Date(Date.now() - 1000); 
-    
-    next();
+    this.passwordChangedAt = new Date(Date.now() - 1000);
+  }
+
+  // Hash PIN if modified
+  if (this.isModified('pin') && this.pin) {
+    this.pin = await bcrypt.hash(this.pin, BCRYPT_SALT_ROUNDS);
+  }
+
+  next();
 });
 
 // Instance method to compare candidate password with the stored hash
-FamilyMemberSchema.methods.comparePassword = async function(
+FamilyMemberSchema.methods.comparePassword = async function (
   candidatePassword: string
 ): Promise<boolean> {
   // 'this.password' is not available here if 'select: false' is active
   // But since we are calling this method on a user doc where we *expect*
   // to check the password, we assume the query explicitly selected it.
-  
+
   // Handle case where password might not be selected (though it should be)
   if (!this.password) {
     // To be safe, re-fetch the document with the password
@@ -90,6 +111,21 @@ FamilyMemberSchema.methods.comparePassword = async function(
   }
 
   return bcrypt.compare(candidatePassword, this.password);
+};
+
+// Instance method to compare candidate PIN with the stored hash
+FamilyMemberSchema.methods.comparePin = async function (
+  candidatePin: string
+): Promise<boolean> {
+  // Handle case where PIN might not be selected
+  if (!this.pin) {
+    // Re-fetch the document with the PIN
+    const user = await model('FamilyMember').findById(this._id).select('+pin');
+    if (!user || !user.pin) return false;
+    return bcrypt.compare(candidatePin, user.pin);
+  }
+
+  return bcrypt.compare(candidatePin, this.pin);
 };
 
 
