@@ -6,7 +6,7 @@ import Task from '../models/Task';
 import Household from '../models/Household';
 import AppError from '../utils/AppError';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import { io } from '../server'; // Import Socket.io instance
+// import { io } from '../server'; // Import Socket.io instance - REMOVED to avoid circular dependency
 import { updateMemberStreak, applyMultiplier } from '../utils/streakCalculator';
 
 /**
@@ -37,6 +37,8 @@ export const createTask = asyncHandler(
     });
 
     // Emit real-time update
+    // Emit real-time update
+    const io = req.app.get('io');
     io.emit('task_updated', { type: 'create', task });
 
     res.status(201).json({
@@ -124,6 +126,8 @@ export const updateTask = asyncHandler(
     }
 
     // Emit real-time update
+    // Emit real-time update
+    const io = req.app.get('io');
     io.emit('task_updated', { type: 'update', task });
 
     res.status(200).json({
@@ -155,6 +159,8 @@ export const deleteTask = asyncHandler(
     }
 
     // Emit real-time update
+    // Emit real-time update
+    const io = req.app.get('io');
     io.emit('task_updated', { type: 'delete', taskId });
 
     res.status(204).json({
@@ -238,6 +244,8 @@ export const completeTask = asyncHandler(
       await task.save();
 
       // Emit real-time update with member points
+      // Emit real-time update with member points
+      const io = req.app.get('io');
       io.emit('task_updated', {
         type: 'update',
         task,
@@ -262,6 +270,8 @@ export const completeTask = asyncHandler(
       await task.save();
 
       // Emit real-time update
+      // Emit real-time update
+      const io = req.app.get('io');
       io.emit('task_updated', { type: 'update', task });
 
       res.status(200).json({
@@ -366,6 +376,8 @@ export const approveTask = asyncHandler(
     await task.save();
 
     // Emit real-time update with member points and streak data
+    // Emit real-time update with member points and streak data
+    const io = req.app.get('io');
     io.emit('task_updated', {
       type: 'update',
       task,

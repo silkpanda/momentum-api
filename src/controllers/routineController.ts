@@ -4,7 +4,7 @@ import asyncHandler from 'express-async-handler';
 import Routine from '../models/Routine';
 import AppError from '../utils/AppError';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import { io } from '../server';
+// import { io } from '../server'; // REMOVED to avoid circular dependency
 
 /**
  * Helper: Check if routine needs daily reset
@@ -55,6 +55,7 @@ export const createRoutine = asyncHandler(
             lastResetDate: new Date().toISOString().split('T')[0],
         });
 
+        const io = req.app.get('io');
         io.emit('routine_updated', { type: 'create', routine });
 
         res.status(201).json({
@@ -176,6 +177,7 @@ export const updateRoutine = asyncHandler(
 
         await routine.save();
 
+        const io = req.app.get('io');
         io.emit('routine_updated', { type: 'update', routine });
 
         res.status(200).json({
@@ -201,6 +203,7 @@ export const deleteRoutine = asyncHandler(
             throw new AppError('Routine not found', 404);
         }
 
+        const io = req.app.get('io');
         io.emit('routine_updated', { type: 'delete', routineId: id });
 
         res.status(204).json({ status: 'success', data: null });
@@ -240,6 +243,8 @@ export const toggleRoutineItem = asyncHandler(
         await routine.save();
 
         // Emit real-time update
+        // Emit real-time update
+        const io = req.app.get('io');
         io.emit('routine_item_toggled', {
             routineId: id,
             itemId,
@@ -288,6 +293,7 @@ export const resetRoutine = asyncHandler(
 
         await routine.save();
 
+        const io = req.app.get('io');
         io.emit('routine_updated', { type: 'reset', routine });
 
         res.status(200).json({

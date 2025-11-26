@@ -6,7 +6,7 @@ import StoreItem from '../models/StoreItem';
 import Transaction from '../models/Transaction';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import { IFamilyMember } from '../models/FamilyMember';
-import { io } from '../server'; // Import Socket.io instance
+// import { io } from '../server'; // Import Socket.io instance - REMOVED to avoid circular dependency
 
 // Helper to handle standard model CRUD response
 const handleResponse = (res: Response, status: number, message: string, data?: any): void => {
@@ -104,6 +104,8 @@ export const purchaseStoreItem = async (req: AuthenticatedRequest, res: Response
     const newPointsTotal = updatedMemberProfile?.pointsTotal;
 
     // Emit real-time update for member points
+    // Emit real-time update for member points
+    const io = req.app.get('io');
     io.emit('member_points_updated', {
       memberId: updatedMemberProfile?._id,
       pointsTotal: newPointsTotal,

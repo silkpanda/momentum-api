@@ -6,8 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteStoreItem = exports.updateStoreItem = exports.getStoreItem = exports.createStoreItem = exports.getAllStoreItems = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const StoreItem_1 = __importDefault(require("../models/StoreItem"));
-const server_1 = require("../server"); // Import Socket.io instance
-// Helper to handle standard model CRUD response
+// import { io } from '../server'; // Socket.io instance - REMOVED to avoid circular dependency
+// Helper to standardize responses
 const handleResponse = (res, status, message, data) => {
     res.status(status).json({
         status: status >= 400 ? 'fail' : 'success',
@@ -15,15 +15,9 @@ const handleResponse = (res, status, message, data) => {
         data: data ? { storeItem: data } : undefined,
     });
 };
-// -----------------------------------------------------------------------------
-// CORE CONTROLLERS (Phase 3.4)
-// -----------------------------------------------------------------------------
-/**
- * Get all StoreItems for the authenticated user's primary Household.
- */
+/** Get all StoreItems for the authenticated user's household */
 const getAllStoreItems = async (req, res) => {
     try {
-        // Items must be retrieved within the user's household context
         const householdId = req.householdId;
         if (!householdId) {
             handleResponse(res, 400, 'Household context is missing from request.');
@@ -33,9 +27,7 @@ const getAllStoreItems = async (req, res) => {
         res.status(200).json({
             status: 'success',
             results: items.length,
-            data: {
-                storeItems: items,
-            },
+            data: { storeItems: items },
         });
     }
     catch (err) {
@@ -43,14 +35,11 @@ const getAllStoreItems = async (req, res) => {
     }
 };
 exports.getAllStoreItems = getAllStoreItems;
-/**
- * Create a new StoreItem for the authenticated user's primary Household.
- */
+/** Create a new StoreItem */
 const createStoreItem = async (req, res) => {
     try {
-        const { itemName, description, cost, isAvailable } = req.body;
-        // FIX: Remove 'description' from the validation check
-        if (!itemName || !cost) {
+        const { itemName, description = '', cost, isAvailable = true, stock, isInfinite = true } = req.body;
+        if (!itemName || cost == null) {
             handleResponse(res, 400, 'Missing mandatory fields: itemName and cost.');
             return;
         }
@@ -59,39 +48,30 @@ const createStoreItem = async (req, res) => {
             handleResponse(res, 400, 'Household context is missing from request.');
             return;
         }
-        // Create the item, linking it to the Household from the JWT payload
         const newItem = await StoreItem_1.default.create({
             itemName,
-            description, // This can now be an empty string
+            description,
             cost,
             isAvailable,
-            householdRefId: householdId, // CRITICAL: Scope item to the Household
+            stock: stock !== undefined ? stock : undefined,
+            isInfinite: isInfinite !== undefined ? isInfinite : true,
+            householdRefId: householdId,
         });
-        // Emit real-time update
-        server_1.io.emit('store_item_updated', { type: 'create', storeItem: newItem });
+        const io = req.app.get('io');
+        io.emit('store_item_updated', { type: 'create', storeItem: newItem });
         handleResponse(res, 201, 'Store item created successfully.', newItem);
     }
     catch (err) {
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to create store item.',
-            error: err.message,
-        });
+        handleResponse(res, 500, 'Failed to create store item.', { error: err.message });
     }
 };
 exports.createStoreItem = createStoreItem;
-/**
- * Get a single StoreItem by ID.
- */
+/** Get a single StoreItem by ID */
 const getStoreItem = async (req, res) => {
     try {
         const itemId = req.params.id;
         const householdId = req.householdId;
-        // Find the item by ID AND ensure it belongs to the current household
-        const item = await StoreItem_1.default.findOne({
-            _id: itemId,
-            householdRefId: householdId,
-        });
+        const item = await StoreItem_1.default.findOne({ _id: itemId, householdRefId: householdId });
         if (!item) {
             handleResponse(res, 404, 'Store item not found or does not belong to your household.');
             return;
@@ -101,78 +81,60 @@ const getStoreItem = async (req, res) => {
     catch (err) {
         if (err instanceof mongoose_1.default.Error.CastError) {
             handleResponse(res, 400, 'Invalid item ID format.');
-            return;
         }
-        handleResponse(res, 500, 'Failed to retrieve store item.', { error: err.message });
+        else {
+            handleResponse(res, 500, 'Failed to retrieve store item.', { error: err.message });
+        }
     }
 };
 exports.getStoreItem = getStoreItem;
-/**
- * Update a StoreItem by ID.
- */
+/** Update a StoreItem */
 const updateStoreItem = async (req, res) => {
     try {
         const itemId = req.params.id;
         const householdId = req.householdId;
-        // Prevent updating householdRefId via this general update endpoint
         const updates = { ...req.body };
-        delete updates.householdRefId;
-        // Find the item by ID and household ID, and then update it
-        const updatedItem = await StoreItem_1.default.findOneAndUpdate({
-            _id: itemId,
-            householdRefId: householdId,
-        }, updates, { new: true, runValidators: true });
+        delete updates.householdRefId; // never allow changing household linkage
+        const updatedItem = await StoreItem_1.default.findOneAndUpdate({ _id: itemId, householdRefId: householdId }, updates, { new: true, runValidators: true });
         if (!updatedItem) {
             handleResponse(res, 404, 'Store item not found or does not belong to your household.');
             return;
         }
-        // Emit real-time update
-        server_1.io.emit('store_item_updated', { type: 'update', storeItem: updatedItem });
+        const io = req.app.get('io');
+        io.emit('store_item_updated', { type: 'update', storeItem: updatedItem });
         handleResponse(res, 200, 'Store item updated successfully.', updatedItem);
     }
     catch (err) {
         if (err instanceof mongoose_1.default.Error.CastError) {
             handleResponse(res, 400, 'Invalid item ID format.');
-            return;
         }
-        res.status(500).json({
-            status: 'error',
-            message: 'Failed to update store item.',
-            error: err.message,
-        });
+        else {
+            handleResponse(res, 500, 'Failed to update store item.', { error: err.message });
+        }
     }
 };
 exports.updateStoreItem = updateStoreItem;
-/**
- * Delete a StoreItem by ID.
- */
+/** Delete a StoreItem */
 const deleteStoreItem = async (req, res) => {
     try {
         const itemId = req.params.id;
         const householdId = req.householdId;
-        // Find the item by ID AND ensure it belongs to the current household before deleting
-        const deletedItem = await StoreItem_1.default.findOneAndDelete({
-            _id: itemId,
-            householdRefId: householdId,
-        });
+        const deletedItem = await StoreItem_1.default.findOneAndDelete({ _id: itemId, householdRefId: householdId });
         if (!deletedItem) {
             handleResponse(res, 404, 'Store item not found or does not belong to your household.');
             return;
         }
-        // Emit real-time update
-        server_1.io.emit('store_item_updated', { type: 'delete', storeItemId: itemId });
-        // Successful deletion returns 204 No Content
-        res.status(204).json({
-            status: 'success',
-            data: null,
-        });
+        const io = req.app.get('io');
+        io.emit('store_item_updated', { type: 'delete', storeItemId: itemId });
+        res.status(204).json({ status: 'success', data: null });
     }
     catch (err) {
         if (err instanceof mongoose_1.default.Error.CastError) {
             handleResponse(res, 400, 'Invalid item ID format.');
-            return;
         }
-        handleResponse(res, 500, 'Failed to delete store item.', { error: err.message });
+        else {
+            handleResponse(res, 500, 'Failed to delete store item.', { error: err.message });
+        }
     }
 };
 exports.deleteStoreItem = deleteStoreItem;

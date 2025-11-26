@@ -57,6 +57,8 @@ const storeItemRoutes_1 = __importDefault(require("./routes/storeItemRoutes"));
 const questRoutes_1 = __importDefault(require("./routes/questRoutes"));
 // NEW ADDITION: Import the routine router
 const routineRoutes_1 = __importDefault(require("./routes/routineRoutes"));
+// NEW ADDITION: Import the meal router
+const mealRoutes_1 = __importDefault(require("./routes/mealRoutes"));
 // NEW ADDITION: Import the wishlist router
 const wishlistRoutes_1 = __importDefault(require("./routes/wishlistRoutes"));
 // NEW IMPORTS FOR ERROR HANDLING
@@ -106,6 +108,8 @@ exports.io.on('connection', (socket) => {
         console.log('User disconnected:', socket.id);
     });
 });
+// Make io accessible in controllers via req.app.get('io')
+app.set('io', exports.io);
 // Middleware
 app.use((0, cors_1.default)()); // Allow cross-origin requests
 app.use(express_1.default.json()); // Parse JSON bodies
@@ -129,11 +133,11 @@ app.use('/api/v1/store-items', storeItemRoutes_1.default);
 // NEW ROUTE REGISTRATION: Register Quest routes
 app.use('/api/v1/quests', questRoutes_1.default);
 // NEW ROUTE REGISTRATION: Register Routine routes
-const mealRoutes_1 = __importDefault(require("./routes/mealRoutes"));
-// ...
 app.use('/api/v1/routines', routineRoutes_1.default);
-app.use('/api/v1/meals', mealRoutes_1.default); // Register meal routes
-app.use('/api/v1/wishlist', wishlistRoutes_1.default); // Register wishlist routes
+// NEW ROUTE REGISTRATION: Register Meal routes
+app.use('/api/v1/meals', mealRoutes_1.default);
+// NEW ROUTE REGISTRATION: Register Wishlist routes
+app.use('/api/v1/wishlist', wishlistRoutes_1.default);
 // Basic Health Check Route
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'API is running', environment: process.env.NODE_ENV });

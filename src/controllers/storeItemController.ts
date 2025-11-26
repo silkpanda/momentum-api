@@ -2,7 +2,7 @@ import { Response } from 'express';
 import mongoose from 'mongoose';
 import StoreItem from '../models/StoreItem';
 import { AuthenticatedRequest } from '../middleware/authMiddleware'; // Authenticated request with householdId
-import { io } from '../server'; // Socket.io instance
+// import { io } from '../server'; // Socket.io instance - REMOVED to avoid circular dependency
 
 // Helper to standardize responses
 const handleResponse = (res: Response, status: number, message: string, data?: any): void => {
@@ -54,6 +54,7 @@ export const createStoreItem = async (req: AuthenticatedRequest, res: Response):
       isInfinite: isInfinite !== undefined ? isInfinite : true,
       householdRefId: householdId,
     });
+    const io = req.app.get('io');
     io.emit('store_item_updated', { type: 'create', storeItem: newItem });
     handleResponse(res, 201, 'Store item created successfully.', newItem);
   } catch (err: any) {
@@ -97,6 +98,7 @@ export const updateStoreItem = async (req: AuthenticatedRequest, res: Response):
       handleResponse(res, 404, 'Store item not found or does not belong to your household.');
       return;
     }
+    const io = req.app.get('io');
     io.emit('store_item_updated', { type: 'update', storeItem: updatedItem });
     handleResponse(res, 200, 'Store item updated successfully.', updatedItem);
   } catch (err: any) {
@@ -118,6 +120,7 @@ export const deleteStoreItem = async (req: AuthenticatedRequest, res: Response):
       handleResponse(res, 404, 'Store item not found or does not belong to your household.');
       return;
     }
+    const io = req.app.get('io');
     io.emit('store_item_updated', { type: 'delete', storeItemId: itemId });
     res.status(204).json({ status: 'success', data: null });
   } catch (err: any) {

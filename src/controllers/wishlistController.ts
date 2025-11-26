@@ -5,7 +5,7 @@
 import { Request, Response } from 'express';
 import WishlistItem from '../models/WishlistItem';
 import Household from '../models/Household';
-import { io } from '../server';
+// import { io } from '../server'; // REMOVED to avoid circular dependency
 
 // Get all wishlist items for a member
 export const getMemberWishlist = async (req: Request, res: Response) => {
@@ -104,6 +104,8 @@ export const createWishlistItem = async (req: Request, res: Response) => {
         await wishlistItem.save();
 
         // Emit WebSocket event
+        // Emit WebSocket event
+        const io = req.app.get('io');
         io.to(householdId).emit('wishlist_updated', {
             action: 'created',
             wishlistItem: wishlistItem.toObject()
@@ -155,6 +157,8 @@ export const updateWishlistItem = async (req: Request, res: Response) => {
         await wishlistItem.save();
 
         // Emit WebSocket event
+        // Emit WebSocket event
+        const io = req.app.get('io');
         io.to(wishlistItem.householdId.toString()).emit('wishlist_updated', {
             action: 'updated',
             wishlistItem: wishlistItem.toObject()
@@ -191,6 +195,8 @@ export const deleteWishlistItem = async (req: Request, res: Response) => {
         await WishlistItem.findByIdAndDelete(id);
 
         // Emit WebSocket event
+        // Emit WebSocket event
+        const io = req.app.get('io');
         io.to(householdId).emit('wishlist_updated', {
             action: 'deleted',
             wishlistItemId: id
@@ -264,6 +270,8 @@ export const markWishlistItemPurchased = async (req: Request, res: Response) => 
         await household?.save();
 
         // Emit WebSocket event
+        // Emit WebSocket event
+        const io = req.app.get('io');
         io.to(wishlistItem.householdId.toString()).emit('wishlist_updated', {
             action: 'purchased',
             wishlistItem: wishlistItem.toObject()

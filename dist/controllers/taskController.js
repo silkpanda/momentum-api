@@ -8,7 +8,7 @@ const express_async_handler_1 = __importDefault(require("express-async-handler")
 const Task_1 = __importDefault(require("../models/Task"));
 const Household_1 = __importDefault(require("../models/Household"));
 const AppError_1 = __importDefault(require("../utils/AppError"));
-const server_1 = require("../server"); // Import Socket.io instance
+// import { io } from '../server'; // Import Socket.io instance - REMOVED to avoid circular dependency
 const streakCalculator_1 = require("../utils/streakCalculator");
 /**
  * @desc    Create a new task
@@ -31,7 +31,9 @@ exports.createTask = (0, express_async_handler_1.default)(async (req, res) => {
         status: 'Pending', // Default status
     });
     // Emit real-time update
-    server_1.io.emit('task_updated', { type: 'create', task });
+    // Emit real-time update
+    const io = req.app.get('io');
+    io.emit('task_updated', { type: 'create', task });
     res.status(201).json({
         status: 'success',
         data: {
@@ -94,7 +96,9 @@ exports.updateTask = (0, express_async_handler_1.default)(async (req, res) => {
         throw new AppError_1.default('No task found with that ID in this household.', 404);
     }
     // Emit real-time update
-    server_1.io.emit('task_updated', { type: 'update', task });
+    // Emit real-time update
+    const io = req.app.get('io');
+    io.emit('task_updated', { type: 'update', task });
     res.status(200).json({
         status: 'success',
         data: {
@@ -118,7 +122,9 @@ exports.deleteTask = (0, express_async_handler_1.default)(async (req, res) => {
         throw new AppError_1.default('No task found with that ID in this household.', 404);
     }
     // Emit real-time update
-    server_1.io.emit('task_updated', { type: 'delete', taskId });
+    // Emit real-time update
+    const io = req.app.get('io');
+    io.emit('task_updated', { type: 'delete', taskId });
     res.status(204).json({
         status: 'success',
         data: null,
@@ -181,7 +187,9 @@ exports.completeTask = (0, express_async_handler_1.default)(async (req, res) => 
         task.completedBy = memberProfile._id;
         await task.save();
         // Emit real-time update with member points
-        server_1.io.emit('task_updated', {
+        // Emit real-time update with member points
+        const io = req.app.get('io');
+        io.emit('task_updated', {
             type: 'update',
             task,
             memberUpdate: {
@@ -204,7 +212,9 @@ exports.completeTask = (0, express_async_handler_1.default)(async (req, res) => 
         task.completedBy = memberProfile._id;
         await task.save();
         // Emit real-time update
-        server_1.io.emit('task_updated', { type: 'update', task });
+        // Emit real-time update
+        const io = req.app.get('io');
+        io.emit('task_updated', { type: 'update', task });
         res.status(200).json({
             status: 'success',
             message: 'Task marked for approval.',
@@ -273,7 +283,9 @@ exports.approveTask = (0, express_async_handler_1.default)(async (req, res) => {
     task.status = 'Approved';
     await task.save();
     // Emit real-time update with member points and streak data
-    server_1.io.emit('task_updated', {
+    // Emit real-time update with member points and streak data
+    const io = req.app.get('io');
+    io.emit('task_updated', {
         type: 'update',
         task,
         memberUpdate: {

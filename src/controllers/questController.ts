@@ -5,7 +5,7 @@ import Quest from '../models/Quest';
 import Household from '../models/Household';
 import AppError from '../utils/AppError';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
-import { io } from '../server';
+// import { io } from '../server'; // REMOVED to avoid circular dependency
 
 // Helper to calculate initial nextReset
 const calculateNextReset = (frequency: 'daily' | 'weekly' | 'monthly') => {
@@ -70,6 +70,7 @@ export const createQuest = asyncHandler(
         });
 
         // Real-time update
+        const io = req.app.get('io');
         io.emit('quest_updated', { type: 'create', quest });
 
         res.status(201).json({
@@ -122,6 +123,7 @@ export const updateQuest = asyncHandler(
         await quest.save();
 
         // Real-time update
+        const io = req.app.get('io');
         io.emit('quest_updated', { type: 'update', quest });
 
         res.status(200).json({
@@ -179,6 +181,7 @@ export const deleteQuest = asyncHandler(
             throw new AppError('Quest not found.', 404);
         }
 
+        const io = req.app.get('io');
         io.emit('quest_updated', { type: 'delete', questId: id });
 
         res.status(204).json({ status: 'success', data: null });
@@ -212,6 +215,7 @@ export const claimQuest = asyncHandler(
             throw new AppError(err.message || 'Failed to claim quest.', 400);
         }
 
+        const io = req.app.get('io');
         io.emit('quest_updated', { type: 'update', quest });
 
         res.status(200).json({
@@ -249,6 +253,7 @@ export const completeQuest = asyncHandler(
             throw new AppError(err.message || 'Failed to complete quest.', 400);
         }
 
+        const io = req.app.get('io');
         io.emit('quest_updated', { type: 'update', quest });
 
         res.status(200).json({
@@ -290,6 +295,7 @@ export const approveQuest = asyncHandler(
         memberProfile.pointsTotal = (memberProfile.pointsTotal || 0) + quest.pointsValue;
         await household.save();
 
+        const io = req.app.get('io');
         io.emit('quest_updated', { type: 'update', quest });
 
         io.emit('member_points_updated', {

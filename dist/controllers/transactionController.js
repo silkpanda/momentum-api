@@ -41,7 +41,7 @@ const mongoose_1 = __importStar(require("mongoose"));
 const Household_1 = __importDefault(require("../models/Household"));
 const StoreItem_1 = __importDefault(require("../models/StoreItem"));
 const Transaction_1 = __importDefault(require("../models/Transaction"));
-const server_1 = require("../server"); // Import Socket.io instance
+// import { io } from '../server'; // Import Socket.io instance - REMOVED to avoid circular dependency
 // Helper to handle standard model CRUD response
 const handleResponse = (res, status, message, data) => {
     res.status(status).json({
@@ -114,7 +114,9 @@ const purchaseStoreItem = async (req, res) => {
         const updatedMemberProfile = updatedHousehold.memberProfiles.find((p) => p.familyMemberId.equals(memberId));
         const newPointsTotal = updatedMemberProfile?.pointsTotal;
         // Emit real-time update for member points
-        server_1.io.emit('member_points_updated', {
+        // Emit real-time update for member points
+        const io = req.app.get('io');
+        io.emit('member_points_updated', {
             memberId: updatedMemberProfile?._id,
             pointsTotal: newPointsTotal,
             householdId: householdId,

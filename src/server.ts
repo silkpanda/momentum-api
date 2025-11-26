@@ -82,6 +82,9 @@ io.on('connection', (socket: any) => {
   });
 });
 
+// Make io accessible in controllers via req.app.get('io')
+app.set('io', io);
+
 // Middleware
 app.use(cors()); // Allow cross-origin requests
 app.use(express.json()); // Parse JSON bodies

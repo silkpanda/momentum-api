@@ -10,16 +10,24 @@ const StoreItemSchema = new mongoose_1.Schema({
     },
     description: {
         type: String,
-        // FIX: Changed from required: true to false
         required: false,
-        default: '', // Add default empty string
+        default: '',
     },
     cost: {
         type: Number,
         required: true,
-        min: 1, // Items must cost at least 1 point
+        min: 1,
     },
     isAvailable: {
+        type: Boolean,
+        default: true,
+    },
+    stock: {
+        type: Number,
+        required: false,
+        min: 0,
+    },
+    isInfinite: {
         type: Boolean,
         default: true,
     },
@@ -30,9 +38,8 @@ const StoreItemSchema = new mongoose_1.Schema({
     },
 }, {
     timestamps: true,
-    collection: 'storeitems', // Mandatory lowercase_plural collection name
+    collection: 'storeitems',
 });
-// Mandatory PascalCase Model name
 const StoreItem = (0, mongoose_1.model)('StoreItem', StoreItemSchema);
 exports.default = StoreItem;
 //# sourceMappingURL=StoreItem.js.map
