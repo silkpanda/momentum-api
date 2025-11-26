@@ -64,7 +64,7 @@ export const getMyHouseholds = asyncHandler(
 
     const household = await Household.findById(householdId).populate({
       path: 'memberProfiles.familyMemberId',
-      select: 'firstName email',
+      select: 'firstName email linkedHouseholds',
     });
 
     if (!household) {
@@ -95,7 +95,7 @@ export const getHousehold = asyncHandler(
     // Fetch and populate (transforms familyMemberId into an Object)
     const household = await Household.findById(id).populate({
       path: 'memberProfiles.familyMemberId',
-      select: 'firstName email',
+      select: 'firstName email linkedHouseholds',
     });
 
     if (!household) {
@@ -306,7 +306,7 @@ export const addMemberToHousehold = asyncHandler(
 
     const finalHousehold = await updatedHousehold.populate({
       path: 'memberProfiles.familyMemberId',
-      select: 'firstName email',
+      select: 'firstName email linkedHouseholds',
     });
 
     // Emit real-time update

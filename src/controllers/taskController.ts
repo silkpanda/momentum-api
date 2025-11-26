@@ -4,6 +4,7 @@ import asyncHandler from 'express-async-handler';
 import mongoose, { Types } from 'mongoose';
 import Task from '../models/Task';
 import Household from '../models/Household';
+import HouseholdLink from '../models/HouseholdLink';
 import AppError from '../utils/AppError';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 // import { io } from '../server'; // Import Socket.io instance - REMOVED to avoid circular dependency
@@ -37,7 +38,6 @@ export const createTask = asyncHandler(
     });
 
     // Emit real-time update
-    // Emit real-time update
     const io = req.app.get('io');
     io.emit('task_updated', { type: 'create', task });
 
@@ -59,9 +59,54 @@ export const getAllTasks = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const householdId = req.householdId; // From JWT
 
-    const tasks = await Task.find({ householdId: householdId })
+    // 1. Fetch local tasks
+    let tasks = await Task.find({ householdId: householdId })
       .populate('assignedTo', 'displayName profileColor') // Populate member details
       .sort({ createdAt: -1 });
+
+    // 2. Check for shared tasks from linked households
+    try {
+      const activeLinks = await HouseholdLink.find({
+        $or: [{ household1: householdId }, { household2: householdId }],
+        status: 'active',
+        'sharingSettings.tasks': 'shared'
+      });
+
+      for (const link of activeLinks) {
+        const otherHouseholdId = link.household1.toString() === householdId?.toString()
+          ? link.household2
+          : link.household1;
+
+        const childFamilyMemberId = link.childId;
+
+        // Find the member profile in the OTHER household for this child
+        const otherHousehold = await Household.findById(otherHouseholdId);
+        if (otherHousehold) {
+          const otherMemberProfile = otherHousehold.memberProfiles.find(p =>
+            p.familyMemberId.toString() === childFamilyMemberId.toString()
+          );
+
+          if (otherMemberProfile) {
+            // Fetch tasks from the other household assigned to this child
+            const otherTasks = await Task.find({
+              householdId: otherHouseholdId,
+              assignedTo: otherMemberProfile._id
+            })
+              .populate('assignedTo', 'displayName profileColor')
+              .sort({ createdAt: -1 });
+
+            // Add to the tasks list
+            tasks = [...tasks, ...otherTasks];
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching shared tasks:', err);
+      // Don't fail the request if sharing fails, just return local tasks
+    }
+
+    // Re-sort tasks by creation date
+    tasks.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     res.status(200).json({
       status: 'success',
@@ -126,7 +171,6 @@ export const updateTask = asyncHandler(
     }
 
     // Emit real-time update
-    // Emit real-time update
     const io = req.app.get('io');
     io.emit('task_updated', { type: 'update', task });
 
@@ -158,7 +202,6 @@ export const deleteTask = asyncHandler(
       throw new AppError('No task found with that ID in this household.', 404);
     }
 
-    // Emit real-time update
     // Emit real-time update
     const io = req.app.get('io');
     io.emit('task_updated', { type: 'delete', taskId });
@@ -239,11 +282,52 @@ export const completeTask = asyncHandler(
       memberProfile.pointsTotal = (memberProfile.pointsTotal || 0) + task.pointsValue;
       await household.save();
 
+      // --- SYNC POINTS TO LINKED HOUSEHOLDS ---
+      try {
+        const childFamilyMemberId = memberProfile.familyMemberId;
+        const activeLinks = await HouseholdLink.find({
+          childId: childFamilyMemberId,
+          $or: [{ household1: householdId }, { household2: householdId }],
+          status: 'active'
+        });
+
+        for (const link of activeLinks) {
+          // Check if points are shared
+          if (link.sharingSettings && link.sharingSettings.points === 'shared') {
+            const otherHouseholdId = link.household1.toString() === householdId?.toString()
+              ? link.household2
+              : link.household1;
+
+            const otherHousehold = await Household.findById(otherHouseholdId);
+            if (otherHousehold) {
+              const otherMemberProfile = otherHousehold.memberProfiles.find(p =>
+                p.familyMemberId.toString() === childFamilyMemberId.toString()
+              );
+
+              if (otherMemberProfile) {
+                otherMemberProfile.pointsTotal = (otherMemberProfile.pointsTotal || 0) + task.pointsValue;
+                await otherHousehold.save();
+
+                // Emit update to other household
+                const io = req.app.get('io');
+                if (io) {
+                  io.to(otherHouseholdId.toString()).emit('member_updated', {
+                    memberId: otherMemberProfile._id,
+                    pointsTotal: otherMemberProfile.pointsTotal
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch (syncError) {
+        console.error('Error syncing points to linked households:', syncError);
+      }
+
       task.status = 'Approved';
       task.completedBy = memberProfile._id as Types.ObjectId;
       await task.save();
 
-      // Emit real-time update with member points
       // Emit real-time update with member points
       const io = req.app.get('io');
       io.emit('task_updated', {
@@ -269,7 +353,6 @@ export const completeTask = asyncHandler(
       task.completedBy = memberProfile!._id as Types.ObjectId;
       await task.save();
 
-      // Emit real-time update
       // Emit real-time update
       const io = req.app.get('io');
       io.emit('task_updated', { type: 'update', task });
@@ -371,11 +454,52 @@ export const approveTask = asyncHandler(
     memberProfile.pointsTotal = (memberProfile.pointsTotal || 0) + pointsToAward;
     await household.save();
 
+    // --- SYNC POINTS TO LINKED HOUSEHOLDS ---
+    try {
+      const childFamilyMemberId = memberProfile.familyMemberId;
+      const activeLinks = await HouseholdLink.find({
+        childId: childFamilyMemberId,
+        $or: [{ household1: householdId }, { household2: householdId }],
+        status: 'active'
+      });
+
+      for (const link of activeLinks) {
+        // Check if points are shared
+        if (link.sharingSettings && link.sharingSettings.points === 'shared') {
+          const otherHouseholdId = link.household1.toString() === householdId?.toString()
+            ? link.household2
+            : link.household1;
+
+          const otherHousehold = await Household.findById(otherHouseholdId);
+          if (otherHousehold) {
+            const otherMemberProfile = otherHousehold.memberProfiles.find(p =>
+              p.familyMemberId.toString() === childFamilyMemberId.toString()
+            );
+
+            if (otherMemberProfile) {
+              otherMemberProfile.pointsTotal = (otherMemberProfile.pointsTotal || 0) + pointsToAward;
+              await otherHousehold.save();
+
+              // Emit update to other household
+              const io = req.app.get('io');
+              if (io) {
+                io.to(otherHouseholdId.toString()).emit('member_updated', {
+                  memberId: otherMemberProfile._id,
+                  pointsTotal: otherMemberProfile.pointsTotal
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (syncError) {
+      console.error('Error syncing points to linked households:', syncError);
+    }
+
     // Update task status
     task.status = 'Approved';
     await task.save();
 
-    // Emit real-time update with member points and streak data
     // Emit real-time update with member points and streak data
     const io = req.app.get('io');
     io.emit('task_updated', {

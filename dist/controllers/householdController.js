@@ -51,7 +51,7 @@ exports.getMyHouseholds = (0, express_async_handler_1.default)(async (req, res) 
     }
     const household = await Household_1.default.findById(householdId).populate({
         path: 'memberProfiles.familyMemberId',
-        select: 'firstName email',
+        select: 'firstName email linkedHouseholds',
     });
     if (!household) {
         throw new AppError_1.default('Primary household not found.', 404);
@@ -75,7 +75,7 @@ exports.getHousehold = (0, express_async_handler_1.default)(async (req, res) => 
     // Fetch and populate (transforms familyMemberId into an Object)
     const household = await Household_1.default.findById(id).populate({
         path: 'memberProfiles.familyMemberId',
-        select: 'firstName email',
+        select: 'firstName email linkedHouseholds',
     });
     if (!household) {
         throw new AppError_1.default('Household not found.', 404);
@@ -217,7 +217,7 @@ exports.addMemberToHousehold = (0, express_async_handler_1.default)(async (req, 
     const updatedHousehold = await household.save();
     const finalHousehold = await updatedHousehold.populate({
         path: 'memberProfiles.familyMemberId',
-        select: 'firstName email',
+        select: 'firstName email linkedHouseholds',
     });
     // Emit real-time update
     server_1.io.emit('household_updated', { type: 'member_add', householdId, member: finalHousehold.memberProfiles.find((p) => p.familyMemberId.equals(familyMemberId)) });

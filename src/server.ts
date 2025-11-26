@@ -25,6 +25,8 @@ import mealRouter from './routes/mealRoutes';
 import wishlistRouter from './routes/wishlistRoutes';
 // NEW ADDITION: Import the PIN router
 import pinRouter from './routes/pin';
+// NEW ADDITION: Import the household link router
+import householdLinkRouter from './routes/householdLinkRoutes';
 
 // NEW IMPORTS FOR ERROR HANDLING
 import AppError from './utils/AppError';
@@ -115,7 +117,9 @@ app.use('/api/v1/pin', pinRouter);
 // NEW ROUTE REGISTRATION: Register Household routes
 // FIX: Double-mount to support both Singular (from BFF?) and Plural (Standard)
 app.use('/api/v1/households', householdRouter);
-app.use('/api/v1/household', householdRouter); // Safety Alias
+
+// NEW ROUTE REGISTRATION: Register Household Link routes (child sharing)
+app.use('/api/v1/household', householdLinkRouter);
 
 // NEW ROUTE REGISTRATION: Register Task routes
 app.use('/api/v1/tasks', taskRouter);

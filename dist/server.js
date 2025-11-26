@@ -61,6 +61,10 @@ const routineRoutes_1 = __importDefault(require("./routes/routineRoutes"));
 const mealRoutes_1 = __importDefault(require("./routes/mealRoutes"));
 // NEW ADDITION: Import the wishlist router
 const wishlistRoutes_1 = __importDefault(require("./routes/wishlistRoutes"));
+// NEW ADDITION: Import the PIN router
+const pin_1 = __importDefault(require("./routes/pin"));
+// NEW ADDITION: Import the household link router
+const householdLinkRoutes_1 = __importDefault(require("./routes/householdLinkRoutes"));
 // NEW IMPORTS FOR ERROR HANDLING
 const AppError_1 = __importDefault(require("./utils/AppError"));
 // FIX APPLIED: Changed to named import for globalErrorHandler
@@ -128,10 +132,13 @@ app.use((req, res, next) => {
 // 4. API Routes
 // Register Auth routes first
 app.use('/api/v1/auth', authRoutes_1.default);
+// NEW ROUTE REGISTRATION: Register PIN routes
+app.use('/api/v1/pin', pin_1.default);
 // NEW ROUTE REGISTRATION: Register Household routes
 // FIX: Double-mount to support both Singular (from BFF?) and Plural (Standard)
 app.use('/api/v1/households', householdRoutes_1.default);
-app.use('/api/v1/household', householdRoutes_1.default); // Safety Alias
+// NEW ROUTE REGISTRATION: Register Household Link routes (child sharing)
+app.use('/api/v1/household', householdLinkRoutes_1.default);
 // NEW ROUTE REGISTRATION: Register Task routes
 app.use('/api/v1/tasks', taskRoutes_1.default);
 // NEW ROUTE REGISTRATION: Register Store Item routes

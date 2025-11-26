@@ -9,6 +9,10 @@ const TaskSchema = new mongoose_1.Schema({
         required: true,
         index: true, // Good for performance
     },
+    visibleToHouseholds: [{
+            type: mongoose_1.Schema.Types.ObjectId,
+            ref: 'Household',
+        }],
     title: {
         type: String,
         required: [true, 'Task title is required'],

@@ -11,24 +11,25 @@ export type TaskStatus = 'Pending' | 'PendingApproval' | 'Approved';
 
 export interface ITask extends Document {
   householdId: Types.ObjectId; // Link to the household context
+  visibleToHouseholds?: Types.ObjectId[]; // Array of other households that can see this task
   title: string;
   description?: string;
   pointsValue: number;
-  
+
   // --- UPDATED ---
   status: TaskStatus;
-  
+
   // Array of member profile sub-document IDs
   // This is who the task is ASSIGNED to
-  assignedTo: Types.ObjectId[]; 
-  
+  assignedTo: Types.ObjectId[];
+
   // The specific member profile ID who completed the task
-  completedBy?: Types.ObjectId; 
-  
+  completedBy?: Types.ObjectId;
+
   dueDate?: Date;
   isRecurring: boolean;
   recurrenceInterval?: 'daily' | 'weekly' | 'monthly';
-  
+
   // Governance: Must be camelCase
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +43,10 @@ const TaskSchema = new Schema<ITask>(
       required: true,
       index: true, // Good for performance
     },
+    visibleToHouseholds: [{
+      type: Schema.Types.ObjectId,
+      ref: 'Household',
+    }],
     title: {
       type: String,
       required: [true, 'Task title is required'],
@@ -56,7 +61,7 @@ const TaskSchema = new Schema<ITask>(
       required: [true, 'Points value is required'],
       min: 0,
     },
-    
+
     // --- THIS IS THE UPDATED FIELD ---
     status: {
       type: String,
@@ -65,7 +70,7 @@ const TaskSchema = new Schema<ITask>(
       required: true,
     },
     // --- END OF UPDATE ---
-    
+
     assignedTo: [
       {
         type: Schema.Types.ObjectId, // Refers to the Household.memberProfiles._id

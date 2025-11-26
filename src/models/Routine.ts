@@ -13,6 +13,7 @@ export interface IRoutineItem {
 // Main Routine document
 export interface IRoutine extends Document {
     householdId: Types.ObjectId;
+    visibleToHouseholds?: Types.ObjectId[]; // Array of other households that can see this routine
     memberId: Types.ObjectId; // Which member this routine belongs to
     timeOfDay: 'morning' | 'noon' | 'night';
     title: string; // e.g., "Morning Routine", "After School Routine"
@@ -57,6 +58,10 @@ const RoutineSchema = new Schema<IRoutine>(
             required: [true, 'Household ID is required'],
             index: true,
         },
+        visibleToHouseholds: [{
+            type: Schema.Types.ObjectId,
+            ref: 'Household',
+        }],
         memberId: {
             type: Schema.Types.ObjectId,
             required: [true, 'Member ID is required'],

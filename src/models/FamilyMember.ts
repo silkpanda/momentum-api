@@ -3,6 +3,31 @@ import { Schema, model, Document, Types } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { BCRYPT_SALT_ROUNDS } from '../config/constants';
 
+// Interface for household-specific data (when data is NOT shared)
+export interface IHouseholdSpecificData {
+  points: number;
+  xp: number;
+  currentStreak: number;
+  streakLastUpdated: Date;
+}
+
+// Interface for linked household info
+export interface ILinkedHousehold {
+  householdId: Types.ObjectId;
+  linkCode: string;
+  linkedAt: Date;
+  linkedBy: Types.ObjectId;
+  householdSpecificData: IHouseholdSpecificData;
+}
+
+// Interface for shared data (only populated when households agree to share)
+export interface ISharedData {
+  points?: number;
+  xp?: number;
+  currentStreak?: number;
+  streakLastUpdated?: Date;
+}
+
 // Interface for the document, per Governance v3 (Sec 2.C)
 // This stores the user's global identity and auth.
 export interface IFamilyMember extends Document {
@@ -19,11 +44,67 @@ export interface IFamilyMember extends Document {
   pinSetupCompleted?: boolean; // Flag to track if user has set up PIN
   lastPinVerification?: Date; // Timestamp of last successful PIN verification
 
+  // Multi-household support (for children in separated parent households)
+  linkedHouseholds?: ILinkedHousehold[];
+  sharedData?: ISharedData;
+
   // Custom method signature for checking password
   comparePassword(candidatePassword: string): Promise<boolean>;
   // Custom method signature for checking PIN
   comparePin(candidatePin: string): Promise<boolean>;
 }
+
+// Sub-schemas
+const HouseholdSpecificDataSchema = new Schema<IHouseholdSpecificData>({
+  points: {
+    type: Number,
+    default: 0,
+  },
+  xp: {
+    type: Number,
+    default: 0,
+  },
+  currentStreak: {
+    type: Number,
+    default: 0,
+  },
+  streakLastUpdated: {
+    type: Date,
+    default: Date.now,
+  },
+}, { _id: false });
+
+const LinkedHouseholdSchema = new Schema<ILinkedHousehold>({
+  householdId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Household',
+    required: true,
+  },
+  linkCode: {
+    type: String,
+    required: true,
+  },
+  linkedAt: {
+    type: Date,
+    default: Date.now,
+  },
+  linkedBy: {
+    type: Schema.Types.ObjectId,
+    ref: 'FamilyMember',
+    required: true,
+  },
+  householdSpecificData: {
+    type: HouseholdSpecificDataSchema,
+    default: () => ({}),
+  },
+}, { _id: false });
+
+const SharedDataSchema = new Schema<ISharedData>({
+  points: Number,
+  xp: Number,
+  currentStreak: Number,
+  streakLastUpdated: Date,
+}, { _id: false });
 
 // Schema definition
 const FamilyMemberSchema = new Schema<IFamilyMember>(
@@ -66,6 +147,10 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
       default: false,
     },
     lastPinVerification: Date,
+
+    // Multi-household support
+    linkedHouseholds: [LinkedHouseholdSchema],
+    sharedData: SharedDataSchema,
 
     // REMOVED 'role' and 'householdRefs' as they are no longer global.
     // Role and points are now managed *inside* the Household model.

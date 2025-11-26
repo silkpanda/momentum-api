@@ -17,6 +17,7 @@ export interface IQuestRecurrence {
 
 export interface IQuest extends Document {
     householdId: mongoose.Types.ObjectId;
+    visibleToHouseholds?: mongoose.Types.ObjectId[]; // Array of other households that can see this quest
     title: string;
     description?: string;
     pointsValue: number;
@@ -81,6 +82,10 @@ const QuestSchema = new Schema<IQuest>({
         ref: 'Household',
         required: true
     },
+    visibleToHouseholds: [{
+        type: Schema.Types.ObjectId,
+        ref: 'Household',
+    }],
     title: {
         type: String,
         required: true,
