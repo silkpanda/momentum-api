@@ -19,6 +19,8 @@ import storeItemRouter from './routes/storeItemRoutes';
 import questRouter from './routes/questRoutes';
 // NEW ADDITION: Import the routine router
 import routineRouter from './routes/routineRoutes';
+// NEW ADDITION: Import the meal router
+import mealRouter from './routes/mealRoutes';
 // NEW ADDITION: Import the wishlist router
 import wishlistRouter from './routes/wishlistRoutes';
 
@@ -107,13 +109,11 @@ app.use('/api/v1/store-items', storeItemRouter);
 // NEW ROUTE REGISTRATION: Register Quest routes
 app.use('/api/v1/quests', questRouter);
 // NEW ROUTE REGISTRATION: Register Routine routes
-import mealRouter from './routes/mealRoutes';
-
-// ...
-
 app.use('/api/v1/routines', routineRouter);
-app.use('/api/v1/meals', mealRouter); // Register meal routes
-app.use('/api/v1/wishlist', wishlistRouter); // Register wishlist routes
+// NEW ROUTE REGISTRATION: Register Meal routes
+app.use('/api/v1/meals', mealRouter);
+// NEW ROUTE REGISTRATION: Register Wishlist routes
+app.use('/api/v1/wishlist', wishlistRouter);
 
 
 // Basic Health Check Route
