@@ -104,6 +104,12 @@ exports.io = new socket_io_1.Server(httpServer, {
 });
 exports.io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
+    socket.on('join_household', (householdId) => {
+        if (householdId) {
+            socket.join(householdId);
+            console.log(`Socket ${socket.id} joined household room: ${householdId}`);
+        }
+    });
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
     });

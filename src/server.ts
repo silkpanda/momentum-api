@@ -77,6 +77,13 @@ export const io = new Server(httpServer, {
 io.on('connection', (socket: any) => {
   console.log('A user connected:', socket.id);
 
+  socket.on('join_household', (householdId: string) => {
+    if (householdId) {
+      socket.join(householdId);
+      console.log(`Socket ${socket.id} joined household room: ${householdId}`);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });
