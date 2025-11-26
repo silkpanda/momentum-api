@@ -73,11 +73,15 @@ exports.signup = (0, express_async_handler_1.default)(async (req, res, next) => 
             householdId = household._id;
         }
         const token = signToken(parentId.toString(), householdId.toString());
+        const userWithRole = {
+            ...newParent.toObject(),
+            role: 'Parent',
+        };
         res.status(201).json({
             status: 'success',
             token,
             data: {
-                parent: newParent,
+                parent: userWithRole,
                 household: household,
             },
         });
@@ -109,11 +113,15 @@ exports.login = (0, express_async_handler_1.default)(async (req, res, next) => {
     }
     const primaryHouseholdId = household._id;
     const token = signToken(parentId.toString(), primaryHouseholdId.toString());
+    const userWithRole = {
+        ...familyMember.toObject(),
+        role: 'Parent',
+    };
     res.status(200).json({
         status: 'success',
         token,
         data: {
-            parent: familyMember,
+            parent: userWithRole,
             primaryHouseholdId,
         },
     });
@@ -135,14 +143,25 @@ const restrictTo = (...roles) => {
     });
 };
 exports.restrictTo = restrictTo;
-const getMe = (req, res) => {
+exports.getMe = (0, express_async_handler_1.default)(async (req, res, next) => {
+    if (!req.user || !req.householdId) {
+        return next(new AppError_1.default('Not authenticated.', 401));
+    }
+    const household = await Household_1.default.findById(req.householdId);
+    if (!household) {
+        return next(new AppError_1.default('Household not found.', 404));
+    }
+    const memberProfile = household.memberProfiles.find((member) => member.familyMemberId.toString() === req.user._id.toString());
+    const userWithRole = {
+        ...req.user.toObject(),
+        role: memberProfile?.role || 'Child',
+    };
     res.status(200).json({
         status: 'success',
         data: {
-            user: req.user,
+            user: userWithRole,
             householdId: req.householdId,
         },
     });
-};
-exports.getMe = getMe;
+});
 //# sourceMappingURL=authController.js.map
