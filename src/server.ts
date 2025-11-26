@@ -19,6 +19,8 @@ import storeItemRouter from './routes/storeItemRoutes';
 import questRouter from './routes/questRoutes';
 // NEW ADDITION: Import the routine router
 import routineRouter from './routes/routineRoutes';
+// NEW ADDITION: Import the wishlist router
+import wishlistRouter from './routes/wishlistRoutes';
 
 // NEW IMPORTS FOR ERROR HANDLING
 import AppError from './utils/AppError';
@@ -111,6 +113,7 @@ import mealRouter from './routes/mealRoutes';
 
 app.use('/api/v1/routines', routineRouter);
 app.use('/api/v1/meals', mealRouter); // Register meal routes
+app.use('/api/v1/wishlist', wishlistRouter); // Register wishlist routes
 
 
 // Basic Health Check Route
