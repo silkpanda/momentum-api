@@ -3,49 +3,53 @@ import { Schema, model, Document, Types } from 'mongoose';
 // Interface for the StoreItem document
 export interface IStoreItem extends Document {
   itemName: string;
-  description: string;
+  description?: string;
   cost: number;
-  isAvailable: boolean;
-  // CRITICAL: Links the item to the Household context
+  isAvailable?: boolean;
+  stock?: number;
+  isInfinite?: boolean;
   householdRefId: Types.ObjectId;
 }
 
 // Schema definition
-const StoreItemSchema = new Schema<IStoreItem>(
-  {
-    itemName: {
-      type: String,
-      required: true,
-      trim: true,
-    },
-    description: {
-      type: String,
-      // FIX: Changed from required: true to false
-      required: false,
-      default: '', // Add default empty string
-    },
-    cost: {
-      type: Number,
-      required: true,
-      min: 1, // Items must cost at least 1 point
-    },
-    isAvailable: {
-      type: Boolean,
-      default: true,
-    },
-    householdRefId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Household',
-      required: true,
-    },
+const StoreItemSchema = new Schema<IStoreItem>({
+  itemName: {
+    type: String,
+    required: true,
+    trim: true,
   },
-  {
-    timestamps: true,
-    collection: 'storeitems', // Mandatory lowercase_plural collection name
+  description: {
+    type: String,
+    required: false,
+    default: '',
   },
-);
+  cost: {
+    type: Number,
+    required: true,
+    min: 1,
+  },
+  isAvailable: {
+    type: Boolean,
+    default: true,
+  },
+  stock: {
+    type: Number,
+    required: false,
+    min: 0,
+  },
+  isInfinite: {
+    type: Boolean,
+    default: true,
+  },
+  householdRefId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Household',
+    required: true,
+  },
+}, {
+  timestamps: true,
+  collection: 'storeitems',
+});
 
-// Mandatory PascalCase Model name
 const StoreItem = model<IStoreItem>('StoreItem', StoreItemSchema);
-
 export default StoreItem;
