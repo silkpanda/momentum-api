@@ -24,8 +24,8 @@ export const getMemberWishlist = async (req: Request, res: Response) => {
             .sort({ priority: -1, createdAt: -1 }); // High priority first, then newest
 
         // Get member's current points to calculate progress
-        const household = await Household.findOne({ 'members._id': memberId });
-        const member = household?.members.find(m => m._id?.toString() === memberId);
+        const household = await Household.findOne({ 'memberProfiles._id': memberId });
+        const member = household?.memberProfiles.find((m: any) => m._id?.toString() === memberId);
         const currentPoints = member?.pointsTotal || 0;
 
         // Add progress calculation to each item
@@ -81,7 +81,7 @@ export const createWishlistItem = async (req: Request, res: Response) => {
             });
         }
 
-        const memberExists = household.members.some(m => m._id?.toString() === memberId);
+        const memberExists = household.memberProfiles.some((m: any) => m._id?.toString() === memberId);
         if (!memberExists) {
             return res.status(404).json({
                 success: false,
@@ -231,8 +231,8 @@ export const markWishlistItemPurchased = async (req: Request, res: Response) => 
         }
 
         // Get member's current points
-        const household = await Household.findOne({ 'members._id': wishlistItem.memberId });
-        const member = household?.members.find(m => m._id?.toString() === wishlistItem.memberId.toString());
+        const household = await Household.findOne({ 'memberProfiles._id': wishlistItem.memberId });
+        const member = household?.memberProfiles.find((m: any) => m._id?.toString() === wishlistItem.memberId.toString());
 
         if (!member) {
             return res.status(404).json({
