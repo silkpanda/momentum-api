@@ -89,18 +89,18 @@ ChildLinkCodeSchema.methods.markAsUsed = async function (usedByHouseholdId: Type
     await this.save();
 };
 
-// Static method to generate unique code
+// Static method to generate unique 6-character code
 ChildLinkCodeSchema.statics.generateCode = async function (childFirstName: string): Promise<string> {
-    const prefix = childFirstName.substring(0, 4).toUpperCase().padEnd(4, 'X');
-    const year = new Date().getFullYear();
-
     let code: string;
     let exists = true;
     let attempts = 0;
 
-    while (exists && attempts < 10) {
-        const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-        code = `${prefix}-${year}-${random}`;
+    while (exists && attempts < 20) {
+        // Generate a random 6-character alphanumeric code
+        code = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+        // Ensure it's exactly 6 characters (pad if needed)
+        code = code.padEnd(6, '0').substring(0, 6);
 
         const existing = await this.findOne({ code });
         exists = !!existing;
