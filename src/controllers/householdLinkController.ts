@@ -142,7 +142,7 @@ export const validateLinkCode = asyncHandler(
             status: 'success',
             data: {
                 valid: true,
-                childId: child._id.toString(),
+                childId: String(child._id),
                 childName: child.firstName,
                 expiresAt: linkCode.expiresAt,
             },
