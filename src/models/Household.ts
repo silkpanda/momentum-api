@@ -17,6 +17,9 @@ export interface IHouseholdMemberProfile {
   longestStreak?: number;       // Personal best streak
   lastCompletionDate?: string;  // ISO date string for tracking (YYYY-MM-DD)
   streakMultiplier?: number;    // Current point multiplier (1.0, 1.5, 2.0, etc.)
+
+  // Multi-Household Feature
+  isLinkedChild?: boolean;      // True if this child is linked to another household
 }
 
 // Interface for the main Household document
@@ -79,6 +82,10 @@ const HouseholdMemberProfileSchema = new Schema<IHouseholdMemberProfile>({
     type: Number,
     default: 1.0,
     min: 1.0,
+  },
+  isLinkedChild: {
+    type: Boolean,
+    default: false,
   },
 }, {
   // This setting ensures Mongoose auto-generates the '_id' for this sub-document

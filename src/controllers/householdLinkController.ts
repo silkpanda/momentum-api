@@ -219,8 +219,21 @@ export const linkExistingChild = asyncHandler(
             profileColor,
             role: 'Child',
             pointsTotal: 0,
+            isLinkedChild: true, // Mark as linked child
         });
         await household.save();
+
+        // Also update the original household to mark the child as linked
+        const originalHousehold = await Household.findById(linkCode.householdId);
+        if (originalHousehold) {
+            const childProfile = originalHousehold.memberProfiles.find(
+                (p) => p.familyMemberId.toString() === linkCode.childId.toString()
+            );
+            if (childProfile) {
+                childProfile.isLinkedChild = true;
+                await originalHousehold.save();
+            }
+        }
 
         // Create household link with default settings (all separate)
         const householdLink = await HouseholdLink.create({
