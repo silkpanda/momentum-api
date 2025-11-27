@@ -4,6 +4,7 @@ import { protect } from '../middleware/authMiddleware';
 import { restrictTo } from '../controllers/authController';
 import {
     generateLinkCode,
+    validateLinkCode,
     linkExistingChild,
     getLinkSettings,
     getHouseholdLinks,
@@ -34,6 +35,13 @@ router.post('/child/generate-link-code', generateLinkCode);
  * @access  Parent only
  */
 router.post('/child/link-existing', linkExistingChild);
+
+/**
+ * @route   GET /api/v1/household/child/validate-code/:code
+ * @desc    Validate a link code without linking
+ * @access  Parent only
+ */
+router.get('/child/validate-code/:code', validateLinkCode);
 
 /**
  * @route   GET /api/v1/household/links

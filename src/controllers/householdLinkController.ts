@@ -89,6 +89,69 @@ export const generateLinkCode = asyncHandler(
 );
 
 /**
+ * Validate a link code without linking
+ * GET /api/v1/household/child/validate-code/:code
+ */
+export const validateLinkCode = asyncHandler(
+    async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+        const { code } = req.params;
+
+        if (!code) {
+            return next(new AppError('Code is required', 400));
+        }
+
+        // Find the link code
+        const linkCode = await ChildLinkCode.findOne({ code: code.toUpperCase() });
+
+        if (!linkCode) {
+            res.status(200).json({
+                status: 'success',
+                data: {
+                    valid: false,
+                },
+            });
+            return;
+        }
+
+        // Check if valid
+        const isValid = (linkCode as any).isValid();
+
+        if (!isValid) {
+            res.status(200).json({
+                status: 'success',
+                data: {
+                    valid: false,
+                },
+            });
+            return;
+        }
+
+        // Get child info
+        const child = await FamilyMember.findById(linkCode.childId);
+        if (!child) {
+            res.status(200).json({
+                status: 'success',
+                data: {
+                    valid: false,
+                },
+            });
+            return;
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                valid: true,
+                childId: child._id.toString(),
+                childName: child.firstName,
+                expiresAt: linkCode.expiresAt,
+            },
+        });
+    }
+);
+
+
+/**
  * Link an existing child to this household using a code
  * POST /api/v1/household/child/link-existing
  * Body: { code, displayName, profileColor }
