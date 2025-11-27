@@ -436,6 +436,61 @@ export const removeMemberFromHousehold = asyncHandler(
       }
     }
 
+    // CLEANUP: If this is a linked child, clean up the link data
+    if (memberToRemove.isLinkedChild && memberToRemove.role === 'Child') {
+      const HouseholdLink = (await import('../models/HouseholdLink')).default;
+
+      // Find and delete the household link
+      const link = await HouseholdLink.findOne({
+        childId: memberToRemove.familyMemberId,
+        $or: [
+          { household1: householdId },
+          { household2: householdId },
+        ],
+      });
+
+      if (link) {
+        // Determine which is the other household
+        const otherHouseholdId = link.household1.toString() === householdId.toString()
+          ? link.household2
+          : link.household1;
+
+        // Update the other household to check if child should still be marked as linked
+        const otherHousehold = await Household.findById(otherHouseholdId);
+        if (otherHousehold) {
+          const otherChildProfile = otherHousehold.memberProfiles.find(
+            (p) => p.familyMemberId.toString() === memberToRemove.familyMemberId.toString()
+          );
+
+          if (otherChildProfile) {
+            // Check if there are any other links for this child
+            const otherLinks = await HouseholdLink.find({
+              childId: memberToRemove.familyMemberId,
+              _id: { $ne: link._id },
+            });
+
+            // If no other links exist, mark as not linked
+            if (otherLinks.length === 0) {
+              otherChildProfile.isLinkedChild = false;
+              await otherHousehold.save();
+            }
+          }
+        }
+
+        // Delete the link
+        await HouseholdLink.findByIdAndDelete(link._id);
+
+        // Update the child's linkedHouseholds array
+        const child = await FamilyMember.findById(memberToRemove.familyMemberId);
+        if (child && child.linkedHouseholds) {
+          child.linkedHouseholds = child.linkedHouseholds.filter(
+            (lh: any) => lh.householdId.toString() !== householdId.toString()
+          );
+          await child.save();
+        }
+      }
+    }
+
     household.memberProfiles = household.memberProfiles.filter(
       (member) => !member._id!.equals(memberProfileId),
     );
