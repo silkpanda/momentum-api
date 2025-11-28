@@ -9,7 +9,7 @@ import {
 const router = express.Router();
 
 router.get('/auth-url', protect, getAuthUrl);
-router.post('/callback', protect, oauthCallback);
+router.get('/callback', oauthCallback);
 router.get('/events', protect, listEvents);
 
 export default router;
