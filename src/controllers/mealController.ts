@@ -160,3 +160,38 @@ export const deleteMealPlan = asyncHandler(async (req: AuthenticatedRequest, res
 
     res.status(204).json({ status: 'success', data: null });
 });
+
+export const getUnratedMeals = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const householdId = req.householdId;
+
+    // Find meals from the past that haven't been rated
+    const unratedMeals = await MealPlan.find({
+        householdId,
+        date: { $lt: new Date() }, // In the past
+        isRated: { $ne: true },
+    })
+        .sort({ date: -1 })
+        .limit(3) // Just get top 3 most recent unrated
+        .populate('itemId');
+
+    res.status(200).json({ status: 'success', data: { unratedMeals } });
+});
+
+export const rateMeal = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    const { mealId } = req.params;
+    const { rating } = req.body;
+
+    if (!rating || rating < 1 || rating > 5) {
+        throw new AppError('Please provide a valid rating between 1 and 5', 400);
+    }
+
+    const meal = await MealPlan.findOneAndUpdate(
+        { _id: mealId, householdId: req.householdId },
+        { rating, isRated: true },
+        { new: true }
+    );
+
+    if (!meal) throw new AppError('Meal not found', 404);
+
+    res.status(200).json({ status: 'success', data: { meal } });
+});

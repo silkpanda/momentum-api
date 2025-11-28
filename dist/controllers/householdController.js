@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -296,6 +329,49 @@ exports.removeMemberFromHousehold = (0, express_async_handler_1.default)(async (
         const parentCount = household.memberProfiles.filter((m) => m.role === 'Parent').length;
         if (parentCount <= 1) {
             throw new AppError_1.default('Cannot remove the last parent from a household.', 400);
+        }
+    }
+    // CLEANUP: If this is a linked child, clean up the link data
+    if (memberToRemove.isLinkedChild && memberToRemove.role === 'Child') {
+        const HouseholdLink = (await Promise.resolve().then(() => __importStar(require('../models/HouseholdLink')))).default;
+        // Find and delete the household link
+        const link = await HouseholdLink.findOne({
+            childId: memberToRemove.familyMemberId,
+            $or: [
+                { household1: householdId },
+                { household2: householdId },
+            ],
+        });
+        if (link) {
+            // Determine which is the other household
+            const otherHouseholdId = link.household1.toString() === householdId.toString()
+                ? link.household2
+                : link.household1;
+            // Update the other household to check if child should still be marked as linked
+            const otherHousehold = await Household_1.default.findById(otherHouseholdId);
+            if (otherHousehold) {
+                const otherChildProfile = otherHousehold.memberProfiles.find((p) => p.familyMemberId.toString() === memberToRemove.familyMemberId.toString());
+                if (otherChildProfile) {
+                    // Check if there are any other links for this child
+                    const otherLinks = await HouseholdLink.find({
+                        childId: memberToRemove.familyMemberId,
+                        _id: { $ne: link._id },
+                    });
+                    // If no other links exist, mark as not linked
+                    if (otherLinks.length === 0) {
+                        otherChildProfile.isLinkedChild = false;
+                        await otherHousehold.save();
+                    }
+                }
+            }
+            // Delete the link
+            await HouseholdLink.findByIdAndDelete(link._id);
+            // Update the child's linkedHouseholds array
+            const child = await FamilyMember_1.default.findById(memberToRemove.familyMemberId);
+            if (child && child.linkedHouseholds) {
+                child.linkedHouseholds = child.linkedHouseholds.filter((lh) => lh.householdId.toString() !== householdId.toString());
+                await child.save();
+            }
         }
     }
     household.memberProfiles = household.memberProfiles.filter((member) => !member._id.equals(memberProfileId));

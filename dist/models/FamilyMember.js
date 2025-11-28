@@ -98,6 +98,12 @@ const FamilyMemberSchema = new mongoose_1.Schema({
     // Multi-household support
     linkedHouseholds: [LinkedHouseholdSchema],
     sharedData: SharedDataSchema,
+    // Google Calendar Integration
+    googleCalendar: {
+        accessToken: String,
+        refreshToken: String,
+        expiryDate: Number,
+    },
     // REMOVED 'role' and 'householdRefs' as they are no longer global.
     // Role and points are now managed *inside* the Household model.
 }, {

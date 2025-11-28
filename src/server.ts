@@ -1,4 +1,3 @@
-// silkpanda/momentum-api/momentum-api-8b94e0d79442b81f45f33d74e43f2675eb08824c/src/server.ts
 import express from 'express';
 import mongoose from 'mongoose';
 import { ServerApiVersion } from 'mongodb';
@@ -7,30 +6,22 @@ import * as dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 
-// CRITICAL ADDITION: Import the authentication router
+// Import routers
 import authRouter from './routes/authRoutes';
-// NEW ADDITION: Import the household router
 import householdRouter from './routes/householdRoutes';
-// NEW ADDITION: Import the task router
 import taskRouter from './routes/taskRoutes';
-// NEW ADDITION: Import the store item router
 import storeItemRouter from './routes/storeItemRoutes';
-// NEW ADDITION: Import the quest router
 import questRouter from './routes/questRoutes';
-// NEW ADDITION: Import the routine router
 import routineRouter from './routes/routineRoutes';
-// NEW ADDITION: Import the meal router
 import mealRouter from './routes/mealRoutes';
-// NEW ADDITION: Import the wishlist router
 import wishlistRouter from './routes/wishlistRoutes';
-// NEW ADDITION: Import the PIN router
 import pinRouter from './routes/pin';
-// NEW ADDITION: Import the household link router
 import householdLinkRouter from './routes/householdLinkRoutes';
+import notificationRouter from './routes/notificationRoutes';
+import googleCalendarRouter from './routes/googleCalendarRoutes';
 
-// NEW IMPORTS FOR ERROR HANDLING
+// Import error handling
 import AppError from './utils/AppError';
-// FIX APPLIED: Changed to named import for globalErrorHandler
 import { globalErrorHandler } from './utils/errorHandler';
 
 // 1. Load Environment Variables
@@ -111,28 +102,31 @@ app.use((req, res, next) => {
 // Register Auth routes first
 app.use('/api/v1/auth', authRouter);
 
-// NEW ROUTE REGISTRATION: Register PIN routes
+// Register PIN routes
 app.use('/api/v1/pin', pinRouter);
 
-// NEW ROUTE REGISTRATION: Register Household routes
-// FIX: Double-mount to support both Singular (from BFF?) and Plural (Standard)
+// Register Household routes
 app.use('/api/v1/households', householdRouter);
 
-// NEW ROUTE REGISTRATION: Register Household Link routes (child sharing)
+// Register Household Link routes (child sharing)
 app.use('/api/v1/household', householdLinkRouter);
 
-// NEW ROUTE REGISTRATION: Register Task routes
+// Register Task routes
 app.use('/api/v1/tasks', taskRouter);
-// NEW ROUTE REGISTRATION: Register Store Item routes
+// Register Store Item routes
 app.use('/api/v1/store-items', storeItemRouter);
-// NEW ROUTE REGISTRATION: Register Quest routes
+// Register Quest routes
 app.use('/api/v1/quests', questRouter);
-// NEW ROUTE REGISTRATION: Register Routine routes
+// Register Routine routes
 app.use('/api/v1/routines', routineRouter);
-// NEW ROUTE REGISTRATION: Register Meal routes
+// Register Meal routes
 app.use('/api/v1/meals', mealRouter);
-// NEW ROUTE REGISTRATION: Register Wishlist routes
+// Register Wishlist routes
 app.use('/api/v1/wishlist', wishlistRouter);
+// Register Notification routes
+app.use('/api/v1/notifications', notificationRouter);
+// Register Google Calendar routes
+app.use('/api/v1/calendar/google', googleCalendarRouter);
 
 
 // Basic Health Check Route

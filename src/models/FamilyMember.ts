@@ -48,6 +48,13 @@ export interface IFamilyMember extends Document {
   linkedHouseholds?: ILinkedHousehold[];
   sharedData?: ISharedData;
 
+  // Google Calendar Integration
+  googleCalendar?: {
+    accessToken: string;
+    refreshToken: string;
+    expiryDate: number;
+  };
+
   // Custom method signature for checking password
   comparePassword(candidatePassword: string): Promise<boolean>;
   // Custom method signature for checking PIN
@@ -151,6 +158,13 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
     // Multi-household support
     linkedHouseholds: [LinkedHouseholdSchema],
     sharedData: SharedDataSchema,
+
+    // Google Calendar Integration
+    googleCalendar: {
+      accessToken: String,
+      refreshToken: String,
+      expiryDate: Number,
+    },
 
     // REMOVED 'role' and 'householdRefs' as they are no longer global.
     // Role and points are now managed *inside* the Household model.

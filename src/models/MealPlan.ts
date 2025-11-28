@@ -10,6 +10,8 @@ export interface IMealPlan extends Document {
     createdAt: Date;
     updatedAt: Date;
     weeklyMealPlanId?: Types.ObjectId;
+    rating?: number;
+    isRated?: boolean;
 }
 
 const MealPlanSchema = new Schema<IMealPlan>(
@@ -45,6 +47,15 @@ const MealPlanSchema = new Schema<IMealPlan>(
             type: Schema.Types.ObjectId,
             ref: 'WeeklyMealPlan',
             required: false,
+        },
+        rating: {
+            type: Number,
+            min: 1,
+            max: 5,
+        },
+        isRated: {
+            type: Boolean,
+            default: false,
         },
     },
     {

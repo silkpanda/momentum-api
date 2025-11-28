@@ -53,6 +53,10 @@ const HouseholdMemberProfileSchema = new mongoose_1.Schema({
         default: 1.0,
         min: 1.0,
     },
+    isLinkedChild: {
+        type: Boolean,
+        default: false,
+    },
 }, {
     // This setting ensures Mongoose auto-generates the '_id' for this sub-document
     _id: true

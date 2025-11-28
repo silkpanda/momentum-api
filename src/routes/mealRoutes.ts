@@ -14,6 +14,8 @@ import {
     deleteMealPlan,
     addMealToPlan,
     removeMealFromPlan,
+    getUnratedMeals,
+    rateMeal,
 } from '../controllers/mealController';
 
 const router = express.Router();
@@ -48,5 +50,9 @@ router.route('/plans/:planId/meals')
 
 router.route('/plans/:planId/meals/:mealId')
     .delete(removeMealFromPlan);
+
+// Ratings
+router.get('/unrated', getUnratedMeals);
+router.post('/rate/:mealId', rateMeal);
 
 export default router;

@@ -37,7 +37,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.io = void 0;
-// silkpanda/momentum-api/momentum-api-8b94e0d79442b81f45f33d74e43f2675eb08824c/src/server.ts
 const express_1 = __importDefault(require("express"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const mongodb_1 = require("mongodb");
@@ -45,29 +44,21 @@ const cors_1 = __importDefault(require("cors"));
 const dotenv = __importStar(require("dotenv"));
 const http_1 = require("http");
 const socket_io_1 = require("socket.io");
-// CRITICAL ADDITION: Import the authentication router
+// Import routers
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
-// NEW ADDITION: Import the household router
 const householdRoutes_1 = __importDefault(require("./routes/householdRoutes"));
-// NEW ADDITION: Import the task router
 const taskRoutes_1 = __importDefault(require("./routes/taskRoutes"));
-// NEW ADDITION: Import the store item router
 const storeItemRoutes_1 = __importDefault(require("./routes/storeItemRoutes"));
-// NEW ADDITION: Import the quest router
 const questRoutes_1 = __importDefault(require("./routes/questRoutes"));
-// NEW ADDITION: Import the routine router
 const routineRoutes_1 = __importDefault(require("./routes/routineRoutes"));
-// NEW ADDITION: Import the meal router
 const mealRoutes_1 = __importDefault(require("./routes/mealRoutes"));
-// NEW ADDITION: Import the wishlist router
 const wishlistRoutes_1 = __importDefault(require("./routes/wishlistRoutes"));
-// NEW ADDITION: Import the PIN router
 const pin_1 = __importDefault(require("./routes/pin"));
-// NEW ADDITION: Import the household link router
 const householdLinkRoutes_1 = __importDefault(require("./routes/householdLinkRoutes"));
-// NEW IMPORTS FOR ERROR HANDLING
+const notificationRoutes_1 = __importDefault(require("./routes/notificationRoutes"));
+const googleCalendarRoutes_1 = __importDefault(require("./routes/googleCalendarRoutes"));
+// Import error handling
 const AppError_1 = __importDefault(require("./utils/AppError"));
-// FIX APPLIED: Changed to named import for globalErrorHandler
 const errorHandler_1 = require("./utils/errorHandler");
 // 1. Load Environment Variables
 dotenv.config();
@@ -132,25 +123,28 @@ app.use((req, res, next) => {
 // 4. API Routes
 // Register Auth routes first
 app.use('/api/v1/auth', authRoutes_1.default);
-// NEW ROUTE REGISTRATION: Register PIN routes
+// Register PIN routes
 app.use('/api/v1/pin', pin_1.default);
-// NEW ROUTE REGISTRATION: Register Household routes
-// FIX: Double-mount to support both Singular (from BFF?) and Plural (Standard)
+// Register Household routes
 app.use('/api/v1/households', householdRoutes_1.default);
-// NEW ROUTE REGISTRATION: Register Household Link routes (child sharing)
+// Register Household Link routes (child sharing)
 app.use('/api/v1/household', householdLinkRoutes_1.default);
-// NEW ROUTE REGISTRATION: Register Task routes
+// Register Task routes
 app.use('/api/v1/tasks', taskRoutes_1.default);
-// NEW ROUTE REGISTRATION: Register Store Item routes
+// Register Store Item routes
 app.use('/api/v1/store-items', storeItemRoutes_1.default);
-// NEW ROUTE REGISTRATION: Register Quest routes
+// Register Quest routes
 app.use('/api/v1/quests', questRoutes_1.default);
-// NEW ROUTE REGISTRATION: Register Routine routes
+// Register Routine routes
 app.use('/api/v1/routines', routineRoutes_1.default);
-// NEW ROUTE REGISTRATION: Register Meal routes
+// Register Meal routes
 app.use('/api/v1/meals', mealRoutes_1.default);
-// NEW ROUTE REGISTRATION: Register Wishlist routes
+// Register Wishlist routes
 app.use('/api/v1/wishlist', wishlistRoutes_1.default);
+// Register Notification routes
+app.use('/api/v1/notifications', notificationRoutes_1.default);
+// Register Google Calendar routes
+app.use('/api/v1/calendar/google', googleCalendarRoutes_1.default);
 // Basic Health Check Route
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'API is running', environment: process.env.NODE_ENV });
