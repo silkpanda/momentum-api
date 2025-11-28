@@ -9,32 +9,36 @@ const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_REDIRECT_URI
 );
 
+import { Request, Response } from 'express';
+import { google } from 'googleapis';
+import FamilyMember from '../models/FamilyMember';
+import asyncHandler from 'express-async-handler';
+
+const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+);
+
 // @desc    Get Google OAuth URL
 // @route   GET /api/calendar/google/auth-url
 // @access  Private
 export const getAuthUrl = asyncHandler(async (req: Request, res: Response) => {
     const scopes = [
         'https://www.googleapis.com/auth/calendar.readonly',
-        'https://www.googleapis.com/auth/calendar.events.readonly'
+        'https://www.googleapis.com/auth/calendar.events.readonly',
     ];
 
     const userId = (req as any).user._id.toString();
 
-    let url = oauth2Client.generateAuthUrl({
+    const url = oauth2Client.generateAuthUrl({
         access_type: 'offline', // Request refresh token
         scope: scopes,
+        prompt: 'consent select_account', // Force consent and account chooser
         state: userId, // Pass user ID as state to identify user in callback
     });
 
-    // Ensure prompt=select_account is added correctly
-    // Check if URL already has the parameter
-    if (!url.includes('prompt=')) {
-        url = url + '&prompt=select_account';
-    }
-
     console.log('Generated OAuth URL:', url);
-    console.log('URL includes prompt=select_account:', url.includes('prompt=select_account'));
-
     res.json({ url });
 });
 
@@ -68,22 +72,18 @@ export const oauthCallback = asyncHandler(async (req: Request, res: Response) =>
 
         user.googleCalendar = {
             accessToken: tokens.access_token!,
-            refreshToken: tokens.refresh_token!, // Only returned on first consent or if prompt='consent'
+            refreshToken: tokens.refresh_token!, // May be undefined on subsequent consents
             expiryDate: tokens.expiry_date!,
         };
 
-        // If refresh token is missing (e.g. re-auth without prompt='consent'), keep the old one if it exists
+        // Preserve existing refresh token if new one is missing
         if (!tokens.refresh_token && user.googleCalendar.refreshToken) {
-            // Keep existing refresh token
-        } else if (!tokens.refresh_token) {
-            // This is bad, we need a refresh token. 
-            // In a real app, we might force re-consent here.
-            console.warn('No refresh token returned from Google');
+            user.googleCalendar.refreshToken = user.googleCalendar.refreshToken;
         }
 
         await user.save();
 
-        // Redirect to mobile app
+        // Redirect back to the mobile app
         res.redirect('momentum://calendar/success');
     } catch (error: any) {
         console.error('Error exchanging code for tokens:', error);
@@ -110,8 +110,7 @@ export const listEvents = asyncHandler(async (req: Request, res: Response) => {
         expiry_date: user.googleCalendar.expiryDate,
     });
 
-    // Handle token refresh if needed (googleapis handles this automatically if refresh_token is set)
-    // But we might want to save the new tokens if they change.
+    // Save refreshed tokens if they change
     oauth2Client.on('tokens', async (tokens) => {
         if (tokens.access_token) {
             user.googleCalendar!.accessToken = tokens.access_token;
@@ -133,7 +132,6 @@ export const listEvents = asyncHandler(async (req: Request, res: Response) => {
             singleEvents: true,
             orderBy: 'startTime',
         });
-
         const events = response.data.items;
         res.json(events);
     } catch (error: any) {
