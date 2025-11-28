@@ -26,11 +26,15 @@ export const getAuthUrl = asyncHandler(async (req: Request, res: Response) => {
         state: userId, // Pass user ID as state to identify user in callback
     });
 
-    // Manually append prompt=select_account to ensure it's included
-    // This forces Google to show the account chooser
-    url = url + '&prompt=select_account';
+    // Ensure prompt=select_account is added correctly
+    // Check if URL already has the parameter
+    if (!url.includes('prompt=')) {
+        url = url + '&prompt=select_account';
+    }
 
     console.log('Generated OAuth URL:', url);
+    console.log('URL includes prompt=select_account:', url.includes('prompt=select_account'));
+
     res.json({ url });
 });
 
