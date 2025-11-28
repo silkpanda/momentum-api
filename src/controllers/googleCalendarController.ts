@@ -23,7 +23,7 @@ export const getAuthUrl = asyncHandler(async (req: Request, res: Response) => {
     const url = oauth2Client.generateAuthUrl({
         access_type: 'offline', // Request refresh token
         scope: scopes,
-        prompt: 'consent select_account', // Force account chooser so user can pick a different Gmail account
+        prompt: 'select_account', // Force account chooser so user can pick a different Gmail account
         state: userId, // Pass user ID as state to identify user in callback
     });
 
