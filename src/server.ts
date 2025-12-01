@@ -27,18 +27,42 @@ import { globalErrorHandler } from './utils/errorHandler';
 // 1. Load Environment Variables
 dotenv.config();
 
-// Mandatory governance check: Ensure critical environment variables are set
-const MONGO_URI = process.env.MONGO_URI || '';
-const PORT = (process.env.PORT && process.env.PORT !== '3000') ? process.env.PORT : 3001;
+// 2. Validate Required Environment Variables
+const requiredEnvVars = [
+  'MONGO_URI',
+  'JWT_SECRET',
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+  'GOOGLE_REDIRECT_URI'
+];
 
-if (!MONGO_URI) {
-  console.error(
-    'CRITICAL ERROR: MONGO_URI environment variable is not set. Cannot connect to MongoDB.',
-  );
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ CRITICAL ERROR: Missing required environment variables:');
+  missingEnvVars.forEach(varName => {
+    console.error(`   - ${varName}`);
+  });
+  console.error('\nPlease set these variables in your .env file before starting the server.');
   process.exit(1);
 }
 
-// 2. Database Connection Setup
+// Warn about optional but recommended variables
+const recommendedEnvVars = ['NODE_ENV', 'JWT_EXPIRES_IN', 'PORT'];
+const missingRecommended = recommendedEnvVars.filter(varName => !process.env[varName]);
+
+if (missingRecommended.length > 0) {
+  console.warn('⚠️  WARNING: Missing recommended environment variables (using defaults):');
+  missingRecommended.forEach(varName => {
+    console.warn(`   - ${varName}`);
+  });
+}
+
+// Extract validated environment variables
+const MONGO_URI = process.env.MONGO_URI!; // Safe to use ! because we validated above
+const PORT = (process.env.PORT && process.env.PORT !== '3000') ? process.env.PORT : 3001;
+
+// 3. Database Connection Setup
 const connectDB = async () => {
   try {
     // MANDATORY: Stable API Configuration (Phase 1.2)
@@ -50,15 +74,15 @@ const connectDB = async () => {
       },
     });
 
-    console.log('MongoDB connection successful with Stable API.');
+    console.log('✅ MongoDB connection successful with Stable API.');
   } catch (error) {
-    console.error('MongoDB connection failed:', error);
+    console.error('❌ MongoDB connection failed:', error);
     // Exit process on failure
     process.exit(1);
   }
 };
 
-// 3. Express App Setup (Must be camelCase: app)
+// 4. Express App Setup (Must be camelCase: app)
 const app = express();
 const httpServer = createServer(app);
 
@@ -98,7 +122,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// 4. API Routes
+// 5. API Routes
 // Register Auth routes first
 app.use('/api/v1/auth', authRouter);
 
@@ -134,24 +158,25 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ status: 'API is running', environment: process.env.NODE_ENV });
 });
 
-// 4b. UNHANDLED ROUTE HANDLER
+// 6. UNHANDLED ROUTE HANDLER
 // Catch all for routes not defined by the application
 app.all('*', (req, res, next) => {
   // Use the AppError utility to create an operational error
   next(new AppError(`Can't find ${req.originalUrl} on this server!`, 404));
 });
 
-// 4c. GLOBAL ERROR HANDLER
+// 7. GLOBAL ERROR HANDLER
 // This middleware runs whenever next(err) is called with an error object
 app.use(globalErrorHandler);
 
-// 5. Start Server
+// 8. Start Server
 const startServer = async () => {
   await connectDB();
 
   // Use httpServer.listen instead of app.listen
   httpServer.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+    console.log(`🚀 Server is running on port ${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 };
 
