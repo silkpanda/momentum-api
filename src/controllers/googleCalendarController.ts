@@ -3,16 +3,6 @@ import { google } from 'googleapis';
 import FamilyMember from '../models/FamilyMember';
 import asyncHandler from 'express-async-handler';
 
-const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
-);
-import { Request, Response } from 'express';
-import { google } from 'googleapis';
-import FamilyMember from '../models/FamilyMember';
-import asyncHandler from 'express-async-handler';
-
 // OAuth2 client – uses env vars from Google Cloud Console
 const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
