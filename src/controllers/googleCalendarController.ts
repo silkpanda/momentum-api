@@ -84,7 +84,7 @@ export const oauthCallback = asyncHandler(async (req: Request, res: Response) =>
 // POST /api/calendar/google/connect – Handle native mobile sign-in
 // ------------------------------------------------------------
 export const connectNative = asyncHandler(async (req: Request, res: Response) => {
-    const { idToken, accessToken } = req.body;
+    const { idToken, accessToken, serverAuthCode } = req.body;
     const userId = (req as any).user._id;
 
     if (!idToken || !accessToken) {
@@ -93,7 +93,7 @@ export const connectNative = asyncHandler(async (req: Request, res: Response) =>
     }
 
     try {
-        // Verify the ID token with Google
+        // 1. Verify the ID token with Google
         const ticket = await oauth2Client.verifyIdToken({
             idToken,
             audience: process.env.GOOGLE_CLIENT_ID,
@@ -107,18 +107,43 @@ export const connectNative = asyncHandler(async (req: Request, res: Response) =>
 
         console.log('Verified Google user:', payload.email);
 
-        // Find the user
+        // 2. Find the user
         const user = await FamilyMember.findById(userId);
         if (!user) {
             res.status(404);
             throw new Error('User not found');
         }
 
-        // Store the tokens (the native SDK provides the access token directly)
+        // 3. Exchange serverAuthCode for Refresh Token (if provided)
+        let newRefreshToken = null;
+        let newAccessToken = accessToken;
+        let newExpiryDate = Date.now() + 3600 * 1000;
+
+        if (serverAuthCode) {
+            try {
+                const { tokens } = await oauth2Client.getToken(serverAuthCode);
+                if (tokens.refresh_token) {
+                    newRefreshToken = tokens.refresh_token;
+                }
+                if (tokens.access_token) {
+                    newAccessToken = tokens.access_token;
+                }
+                if (tokens.expiry_date) {
+                    newExpiryDate = tokens.expiry_date;
+                }
+                console.log('Successfully exchanged serverAuthCode for tokens');
+            } catch (tokenError) {
+                console.error('Failed to exchange serverAuthCode:', tokenError);
+                // Continue with the provided accessToken, but warn
+            }
+        }
+
+        // 4. Update User
         user.googleCalendar = {
-            accessToken: accessToken,
-            refreshToken: accessToken, // For native sign-in, we'll refresh via the SDK
-            expiryDate: Date.now() + 3600 * 1000, // 1 hour from now
+            accessToken: newAccessToken,
+            // Only update refresh token if we got a new one, or keep existing one
+            refreshToken: newRefreshToken || user.googleCalendar?.refreshToken || '',
+            expiryDate: newExpiryDate,
         };
 
         await user.save();
@@ -128,7 +153,7 @@ export const connectNative = asyncHandler(async (req: Request, res: Response) =>
     } catch (error: any) {
         console.error('Error verifying Google token:', error);
         res.status(500);
-        throw new Error('Failed to verify Google credentials');
+        throw new Error(`Failed to verify Google credentials: ${error.message}`);
     }
 });
 
@@ -177,6 +202,7 @@ export const listEvents = asyncHandler(async (req: Request, res: Response) => {
     } catch (error: any) {
         console.error('Error fetching calendar events:', error);
         res.status(500);
-        throw new Error('Failed to fetch events');
+        // Return the actual error message for debugging
+        throw new Error(`Failed to fetch events: ${error.message || JSON.stringify(error)}`);
     }
 });
