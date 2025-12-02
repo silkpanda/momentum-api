@@ -86,10 +86,38 @@ const connectDB = async () => {
 const app = express();
 const httpServer = createServer(app);
 
+// CORS Configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002', // Mobile BFF
+    'http://localhost:8081',
+    'https://momentum-web.onrender.com',
+    'https://momentum-mobile-bff.onrender.com'
+  ];
+
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn(`Blocked CORS request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+};
+
 export const io = new Server(httpServer, {
   cors: {
-    origin: "*", // Allow all origins for now (BFF, Mobile, etc.)
-    methods: ["GET", "POST"]
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
@@ -112,7 +140,7 @@ io.on('connection', (socket: any) => {
 app.set('io', io);
 
 // Middleware
-app.use(cors()); // Allow cross-origin requests
+app.use(cors(corsOptions)); // Allow cross-origin requests
 app.use(express.json()); // Parse JSON bodies
 
 // --- DEBUG LOGGER ---
@@ -180,4 +208,8 @@ const startServer = async () => {
   });
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+export { app, httpServer };

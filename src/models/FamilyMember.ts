@@ -55,6 +55,9 @@ export interface IFamilyMember extends Document {
     expiryDate: number;
   };
 
+  // Push Notifications
+  pushTokens?: string[];
+
   // Custom method signature for checking password
   comparePassword(candidatePassword: string): Promise<boolean>;
   // Custom method signature for checking PIN
@@ -165,6 +168,11 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
       refreshToken: String,
       expiryDate: Number,
     },
+
+    // Push Notifications
+    pushTokens: [{
+      type: String
+    }],
 
     // REMOVED 'role' and 'householdRefs' as they are no longer global.
     // Role and points are now managed *inside* the Household model.
