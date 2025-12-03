@@ -205,9 +205,17 @@ export const listEvents = asyncHandler(async (req: Request, res: Response) => {
         console.error('Error fetching calendar events:', error);
         console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
 
-        // If token is expired or revoked, clear the stored credentials and return empty array
-        if (error.message?.includes('invalid_grant') || error.code === 401 || error.code === 400) {
-            console.log('Google Calendar token expired or revoked, clearing credentials');
+        // If token is expired, revoked, or API is disabled (403)
+        if (error.message?.includes('invalid_grant') || error.code === 401 || error.code === 400 || error.code === 403) {
+            console.warn('Google Calendar error (token expired, revoked, or API disabled):', error.message);
+
+            // If it's a 403, it might be that the API is not enabled. Don't clear credentials, just return empty.
+            if (error.code === 403) {
+                res.json([]);
+                return;
+            }
+
+            console.log('Clearing invalid Google credentials');
             user.googleCalendar = undefined;
             await user.save();
             res.json([]);
