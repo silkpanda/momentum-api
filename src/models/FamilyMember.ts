@@ -200,8 +200,8 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
 
 // Pre-save hook to hash the password and PIN before saving
 FamilyMemberSchema.pre('save', async function (next) {
-  // Hash password if modified
-  if (this.isModified('password')) {
+  // Hash password if modified and exists (password is optional for Google OAuth users)
+  if (this.isModified('password') && this.password) {
     this.password = await bcrypt.hash(this.password, BCRYPT_SALT_ROUNDS);
     // Update the password change timestamp (used for invalidating old JWTs)
     // Set it 1 second in the past to ensure JWT is created *after* this timestamp
