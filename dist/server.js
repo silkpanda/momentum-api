@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.io = void 0;
+exports.httpServer = exports.app = exports.io = void 0;
 const express_1 = __importDefault(require("express"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const mongodb_1 = require("mongodb");
@@ -62,14 +62,36 @@ const AppError_1 = __importDefault(require("./utils/AppError"));
 const errorHandler_1 = require("./utils/errorHandler");
 // 1. Load Environment Variables
 dotenv.config();
-// Mandatory governance check: Ensure critical environment variables are set
-const MONGO_URI = process.env.MONGO_URI || '';
-const PORT = (process.env.PORT && process.env.PORT !== '3000') ? process.env.PORT : 3001;
-if (!MONGO_URI) {
-    console.error('CRITICAL ERROR: MONGO_URI environment variable is not set. Cannot connect to MongoDB.');
+// 2. Validate Required Environment Variables
+const requiredEnvVars = [
+    'MONGO_URI',
+    'JWT_SECRET',
+    'GOOGLE_CLIENT_ID',
+    'GOOGLE_CLIENT_SECRET',
+    'GOOGLE_REDIRECT_URI'
+];
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingEnvVars.length > 0) {
+    console.error('❌ CRITICAL ERROR: Missing required environment variables:');
+    missingEnvVars.forEach(varName => {
+        console.error(`   - ${varName}`);
+    });
+    console.error('\nPlease set these variables in your .env file before starting the server.');
     process.exit(1);
 }
-// 2. Database Connection Setup
+// Warn about optional but recommended variables
+const recommendedEnvVars = ['NODE_ENV', 'JWT_EXPIRES_IN', 'PORT'];
+const missingRecommended = recommendedEnvVars.filter(varName => !process.env[varName]);
+if (missingRecommended.length > 0) {
+    console.warn('⚠️  WARNING: Missing recommended environment variables (using defaults):');
+    missingRecommended.forEach(varName => {
+        console.warn(`   - ${varName}`);
+    });
+}
+// Extract validated environment variables
+const MONGO_URI = process.env.MONGO_URI; // Safe to use ! because we validated above
+const PORT = (process.env.PORT && process.env.PORT !== '3000') ? process.env.PORT : 3001;
+// 3. Database Connection Setup
 const connectDB = async () => {
     try {
         // MANDATORY: Stable API Configuration (Phase 1.2)
@@ -80,21 +102,50 @@ const connectDB = async () => {
                 deprecationErrors: true,
             },
         });
-        console.log('MongoDB connection successful with Stable API.');
+        console.log('✅ MongoDB connection successful with Stable API.');
     }
     catch (error) {
-        console.error('MongoDB connection failed:', error);
+        console.error('❌ MongoDB connection failed:', error);
         // Exit process on failure
         process.exit(1);
     }
 };
-// 3. Express App Setup (Must be camelCase: app)
+// 4. Express App Setup (Must be camelCase: app)
 const app = (0, express_1.default)();
+exports.app = app;
 const httpServer = (0, http_1.createServer)(app);
+exports.httpServer = httpServer;
+// CORS Configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+    : [
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'http://localhost:3002', // Mobile BFF
+        'http://localhost:8081',
+        'https://momentum-web.onrender.com',
+        'https://momentum-mobile-bff.onrender.com'
+    ];
+const corsOptions = {
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin)
+            return callback(null, true);
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        }
+        else {
+            console.warn(`Blocked CORS request from origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
+};
 exports.io = new socket_io_1.Server(httpServer, {
     cors: {
-        origin: "*", // Allow all origins for now (BFF, Mobile, etc.)
-        methods: ["GET", "POST"]
+        origin: allowedOrigins,
+        methods: ["GET", "POST"],
+        credentials: true
     }
 });
 exports.io.on('connection', (socket) => {
@@ -112,7 +163,7 @@ exports.io.on('connection', (socket) => {
 // Make io accessible in controllers via req.app.get('io')
 app.set('io', exports.io);
 // Middleware
-app.use((0, cors_1.default)()); // Allow cross-origin requests
+app.use((0, cors_1.default)(corsOptions)); // Allow cross-origin requests
 app.use(express_1.default.json()); // Parse JSON bodies
 // --- DEBUG LOGGER ---
 // This will print exactly what the Core API receives from the BFF
@@ -120,7 +171,7 @@ app.use((req, res, next) => {
     console.log(`[Core API] Incoming Request: ${req.method} ${req.originalUrl}`);
     next();
 });
-// 4. API Routes
+// 5. API Routes
 // Register Auth routes first
 app.use('/api/v1/auth', authRoutes_1.default);
 // Register PIN routes
@@ -149,22 +200,25 @@ app.use('/api/v1/calendar/google', googleCalendarRoutes_1.default);
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'API is running', environment: process.env.NODE_ENV });
 });
-// 4b. UNHANDLED ROUTE HANDLER
+// 6. UNHANDLED ROUTE HANDLER
 // Catch all for routes not defined by the application
 app.all('*', (req, res, next) => {
     // Use the AppError utility to create an operational error
     next(new AppError_1.default(`Can't find ${req.originalUrl} on this server!`, 404));
 });
-// 4c. GLOBAL ERROR HANDLER
+// 7. GLOBAL ERROR HANDLER
 // This middleware runs whenever next(err) is called with an error object
 app.use(errorHandler_1.globalErrorHandler);
-// 5. Start Server
+// 8. Start Server
 const startServer = async () => {
     await connectDB();
     // Use httpServer.listen instead of app.listen
     httpServer.listen(PORT, () => {
-        console.log(`Server is running on port ${PORT}`);
+        console.log(`🚀 Server is running on port ${PORT}`);
+        console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
     });
 };
-startServer();
+if (require.main === module) {
+    startServer();
+}
 //# sourceMappingURL=server.js.map

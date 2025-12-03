@@ -203,6 +203,7 @@ export const listEvents = asyncHandler(async (req: Request, res: Response) => {
         res.json(events);
     } catch (error: any) {
         console.error('Error fetching calendar events:', error);
+        console.error('Error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
 
         // If token is expired or revoked, clear the stored credentials and return empty array
         if (error.message?.includes('invalid_grant') || error.code === 401 || error.code === 400) {
