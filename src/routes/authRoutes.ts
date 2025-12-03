@@ -11,8 +11,10 @@ const router = Router();
 // Non-protected routes (Auth)
 // POST /api/v1/auth/signup (Parent Sign-Up)
 // POST /api/v1/auth/login (Parent Login)
+// POST /api/v1/auth/google (Google OAuth)
 router.post('/signup', signup);
 router.post('/login', login);
+router.post('/google', googleAuth);
 
 // All routes after this middleware will be protected by JWT
 router.use(protect);

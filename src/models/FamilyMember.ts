@@ -36,8 +36,12 @@ export interface IFamilyMember extends Document {
   email: string;
 
   // Authentication fields
-  password: string; // Stored hash
+  password?: string; // Stored hash (optional for Google OAuth users)
   passwordChangedAt?: Date;
+
+  // Google OAuth
+  googleId?: string; // Google account ID for OAuth users
+  onboardingCompleted?: boolean; // Track if user has completed onboarding
 
   // PIN Authentication (4-digit, hashed)
   pin?: string; // Stored hash (bcrypt)
@@ -138,14 +142,25 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
       // Simple email validation
       match: [/.+@.+\..+/, 'Please enter a valid email address'],
     },
-    // The Hashed Password
+    // The Hashed Password (optional for Google OAuth users)
     password: {
       type: String,
-      required: [true, 'Password is required'],
+      required: false, // Not required for Google OAuth users
       select: false, // Ensures hash is not retrieved by default queries
       minlength: 8,
     },
     passwordChangedAt: Date, // Tracks last password update
+
+    // Google OAuth fields
+    googleId: {
+      type: String,
+      sparse: true, // Allows null values but ensures uniqueness when present
+      unique: true,
+    },
+    onboardingCompleted: {
+      type: Boolean,
+      default: false,
+    },
 
     // PIN Authentication fields
     pin: {
