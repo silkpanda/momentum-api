@@ -203,8 +203,18 @@ export const listEvents = asyncHandler(async (req: Request, res: Response) => {
         res.json(events);
     } catch (error: any) {
         console.error('Error fetching calendar events:', error);
+
+        // If token is expired or revoked, clear the stored credentials and return empty array
+        if (error.message?.includes('invalid_grant') || error.code === 401 || error.code === 400) {
+            console.log('Google Calendar token expired or revoked, clearing credentials');
+            user.googleCalendar = undefined;
+            await user.save();
+            res.json([]);
+            return;
+        }
+
+        // For other errors, throw
         res.status(500);
-        // Return the actual error message for debugging
         throw new Error(`Failed to fetch events: ${error.message || JSON.stringify(error)}`);
     }
 });
