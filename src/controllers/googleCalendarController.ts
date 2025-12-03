@@ -164,9 +164,10 @@ export const listEvents = asyncHandler(async (req: Request, res: Response) => {
     const userId = (req as any).user._id;
     const user = await FamilyMember.findById(userId);
 
+    // If user hasn't connected Google Calendar yet, return empty array instead of error
     if (!user || !user.googleCalendar || !user.googleCalendar.accessToken) {
-        res.status(400);
-        throw new Error('Google Calendar not connected');
+        console.log('User has not connected Google Calendar yet');
+        return res.json([]);
     }
 
     oauth2Client.setCredentials({
