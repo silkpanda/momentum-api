@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { protect } from '../middleware/authMiddleware';
 import { restrictTo, signup, login, getMe } from '../controllers/authController'; // Import all Auth controllers
+import { googleAuth, completeOnboarding } from '../controllers/googleAuthController';
 // Removed imports for createHousehold, addFamilyMember
 
 // Mandatory camelCase variable name for the Router instance
@@ -18,6 +19,7 @@ router.use(protect);
 
 // Protected health check route: GET /api/v1/auth/me
 router.get('/me', getMe);
+router.post('/onboarding/complete', completeOnboarding);
 
 // NOTE: All previously misplaced household/member management routes are now in householdRoutes.ts
 
