@@ -118,6 +118,7 @@ export const verifyPin = async (req: Request, res: Response) => {
 
         // Check if PIN is set up
         if (!user.pin || !user.pinSetupCompleted) {
+            console.log('[PIN Verify] PIN not set up:', { hasPin: !!user.pin, pinSetupCompleted: user.pinSetupCompleted });
             return res.status(400).json({
                 status: 'error',
                 message: 'PIN not set up for this user',
@@ -125,8 +126,14 @@ export const verifyPin = async (req: Request, res: Response) => {
             });
         }
 
+        console.log('[PIN Verify] Comparing PIN for user:', user._id);
+        console.log('[PIN Verify] PIN hash length:', user.pin?.length);
+        console.log('[PIN Verify] Entered PIN length:', pin.length);
+
         // Verify PIN
         const isValid = await user.comparePin(pin);
+        console.log('[PIN Verify] PIN comparison result:', isValid);
+
         if (!isValid) {
             return res.status(401).json({ status: 'error', message: 'Incorrect PIN' });
         }
