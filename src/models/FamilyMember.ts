@@ -151,9 +151,7 @@ FamilyMemberSchema.pre('save', async function (next) {
 });
 
 // Compare password method
-FamilyMemberSchema.methods.comparePassword = async function (
-  candidatePassword: string
-): Promise<boolean> {
+FamilyMemberSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
   if (!this.password) {
     const user = await model('FamilyMember').findById(this._id).select('+password');
     if (!user || !user.password) return false;
@@ -163,23 +161,26 @@ FamilyMemberSchema.methods.comparePassword = async function (
 };
 
 // Compare PIN method with detailed logging
-FamilyMemberSchema.methods.comparePin = async function (
-  candidatePin: string
-): Promise<boolean> {
-  console.log('[comparePin] Candidate PIN length:', candidatePin.length);
+FamilyMemberSchema.methods.comparePin = async function (candidatePin: string): Promise<boolean> {
+  // Ensure the candidate PIN is a string (in case a number is sent)
+  const pinStr = `${candidatePin}`;
+  console.log('[comparePin] Candidate PIN (as string):', pinStr);
+  console.log('[comparePin] Candidate PIN length:', pinStr.length);
   console.log('[comparePin] Stored PIN hash length:', this.pin?.length);
   console.log('[comparePin] Stored PIN hash (masked):', this.pin ? this.pin.slice(0, 10) + '...' : 'none');
+
   if (!this.pin) {
     const user = await model('FamilyMember').findById(this._id).select('+pin');
     if (!user || !user.pin) {
       console.log('[comparePin] No PIN found on re-fetch');
       return false;
     }
-    const result = await bcrypt.compare(candidatePin, user.pin);
+    const result = await bcrypt.compare(pinStr, user.pin);
     console.log('[comparePin] Result after re-fetch:', result);
     return result;
   }
-  const result = await bcrypt.compare(candidatePin, this.pin);
+
+  const result = await bcrypt.compare(pinStr, this.pin);
   console.log('[comparePin] Result:', result);
   return result;
 };
