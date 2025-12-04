@@ -104,17 +104,23 @@ export const verifyPin = async (req: Request, res: Response) => {
         }
 
         // Find the member in the household
-        // FIX: Use memberProfiles instead of members
         const member = household.memberProfiles.find((m: IHouseholdMemberProfile) => m._id?.toString() === memberId);
+        let user;
         if (!member) {
-            return res.status(404).json({ status: 'error', message: 'Member not found in household' });
+            // Fallback: treat memberId as a FamilyMember ID directly
+            console.log('[PIN Verify] Member not found in household, trying direct FamilyMember lookup');
+            user = await FamilyMember.findById(memberId).select('+pin');
+            if (!user) {
+                return res.status(404).json({ status: 'error', message: 'User not found' });
+            }
+        } else {
+            // Get the FamilyMember document with PIN
+            user = await FamilyMember.findById(member.familyMemberId).select('+pin');
+            if (!user) {
+                return res.status(404).json({ status: 'error', message: 'User not found' });
+            }
         }
 
-        // Get the FamilyMember document with PIN
-        const user = await FamilyMember.findById(member.familyMemberId).select('+pin');
-        if (!user) {
-            return res.status(404).json({ status: 'error', message: 'User not found' });
-        }
 
         // Check if PIN is set up
         if (!user.pin || !user.pinSetupCompleted) {
