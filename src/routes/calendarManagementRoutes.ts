@@ -2,10 +2,10 @@
 // src/routes/calendarManagementRoutes.ts
 // Routes for calendar selection and creation during onboarding
 // =========================================================
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import { protect } from '../middleware/authMiddleware';
-import { asyncHandler } from '../utils/asyncHandler';
-import { AppError } from '../utils/appError';
+import asyncHandler from 'express-async-handler';
+import AppError from '../utils/AppError';
 import FamilyMember from '../models/FamilyMember';
 import {
     listUserCalendars,
@@ -20,7 +20,7 @@ const router = express.Router();
  * @route   GET /api/v1/calendar/list
  * @access  Protected
  */
-router.get('/list', protect, asyncHandler(async (req, res, next) => {
+router.get('/list', protect, asyncHandler(async (req: any, res: Response, next: NextFunction) => {
     const userId = req.user?._id;
 
     const familyMember = await FamilyMember.findById(userId);
@@ -49,7 +49,7 @@ router.get('/list', protect, asyncHandler(async (req, res, next) => {
  * @route   POST /api/v1/calendar/create
  * @access  Protected
  */
-router.post('/create', protect, asyncHandler(async (req, res, next) => {
+router.post('/create', protect, asyncHandler(async (req: any, res: Response, next: NextFunction) => {
     const userId = req.user?._id;
     const { summary, description } = req.body;
 
@@ -89,7 +89,7 @@ router.post('/create', protect, asyncHandler(async (req, res, next) => {
  * @route   POST /api/v1/calendar/verify
  * @access  Protected
  */
-router.post('/verify', protect, asyncHandler(async (req, res, next) => {
+router.post('/verify', protect, asyncHandler(async (req: any, res: Response, next: NextFunction) => {
     const userId = req.user?._id;
     const { calendarId } = req.body;
 

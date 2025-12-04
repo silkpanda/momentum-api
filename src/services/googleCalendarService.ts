@@ -40,9 +40,9 @@ export async function listUserCalendars(accessToken: string): Promise<CalendarLi
         const calendars: CalendarListItem[] = (response.data.items || []).map(item => ({
             id: item.id || '',
             summary: item.summary || '',
-            description: item.description,
-            primary: item.primary,
-            backgroundColor: item.backgroundColor,
+            description: item.description || undefined,
+            primary: item.primary || undefined,
+            backgroundColor: item.backgroundColor || undefined,
         }));
 
         return calendars;
@@ -99,7 +99,7 @@ export async function getCalendarById(
         return {
             id: response.data.id || '',
             summary: response.data.summary || '',
-            description: response.data.description,
+            description: response.data.description || undefined,
         };
     } catch (error: any) {
         console.error('Error getting calendar:', error);

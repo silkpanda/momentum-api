@@ -145,12 +145,13 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
                     orderBy: 'startTime',
                 });
 
-                return res.status(200).json({
+                res.status(200).json({
                     status: 'success',
                     data: {
                         events: response.data.items || [],
                     },
                 });
+                return;
 
             } catch (refreshError: any) {
                 console.error('Token refresh error:', refreshError);
