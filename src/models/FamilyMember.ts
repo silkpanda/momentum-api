@@ -29,7 +29,6 @@ export interface ISharedData {
 }
 
 // Interface for the document, per Governance v3 (Sec 2.C)
-// This stores the user's global identity and auth.
 export interface IFamilyMember extends Document {
   firstName: string;
   lastName: string; // ADDED per v3 spec
@@ -63,197 +62,126 @@ export interface IFamilyMember extends Document {
   // Push Notifications
   pushTokens?: string[];
 
-  // Custom method signature for checking password
+  // Custom method signatures
   comparePassword(candidatePassword: string): Promise<boolean>;
-  // Custom method signature for checking PIN
   comparePin(candidatePin: string): Promise<boolean>;
 }
 
 // Sub-schemas
-const HouseholdSpecificDataSchema = new Schema<IHouseholdSpecificData>({
-  points: {
-    type: Number,
-    default: 0,
+const HouseholdSpecificDataSchema = new Schema<IHouseholdSpecificData>(
+  {
+    points: { type: Number, default: 0 },
+    xp: { type: Number, default: 0 },
+    currentStreak: { type: Number, default: 0 },
+    streakLastUpdated: { type: Date, default: Date.now },
   },
-  xp: {
-    type: Number,
-    default: 0,
-  },
-  currentStreak: {
-    type: Number,
-    default: 0,
-  },
-  streakLastUpdated: {
-    type: Date,
-    default: Date.now,
-  },
-}, { _id: false });
+  { _id: false }
+);
 
-const LinkedHouseholdSchema = new Schema<ILinkedHousehold>({
-  householdId: {
-    type: Schema.Types.ObjectId,
-    ref: 'Household',
-    required: true,
+const LinkedHouseholdSchema = new Schema<ILinkedHousehold>(
+  {
+    householdId: { type: Schema.Types.ObjectId, ref: 'Household', required: true },
+    linkCode: { type: String, required: true },
+    linkedAt: { type: Date, default: Date.now },
+    linkedBy: { type: Schema.Types.ObjectId, ref: 'FamilyMember', required: true },
+    householdSpecificData: { type: HouseholdSpecificDataSchema, default: () => ({}) },
   },
-  linkCode: {
-    type: String,
-    required: true,
-  },
-  linkedAt: {
-    type: Date,
-    default: Date.now,
-  },
-  linkedBy: {
-    type: Schema.Types.ObjectId,
-    ref: 'FamilyMember',
-    required: true,
-  },
-  householdSpecificData: {
-    type: HouseholdSpecificDataSchema,
-    default: () => ({}),
-  },
-}, { _id: false });
+  { _id: false }
+);
 
-const SharedDataSchema = new Schema<ISharedData>({
-  points: Number,
-  xp: Number,
-  currentStreak: Number,
-  streakLastUpdated: Date,
-}, { _id: false });
+const SharedDataSchema = new Schema<ISharedData>(
+  {
+    points: Number,
+    xp: Number,
+    currentStreak: Number,
+    streakLastUpdated: Date,
+  },
+  { _id: false }
+);
 
-// Schema definition
+// Main schema definition
 const FamilyMemberSchema = new Schema<IFamilyMember>(
   {
-    firstName: {
-      type: String,
-      required: [true, 'First name is required'],
-      trim: true,
-    },
-    lastName: { // ADDED per v3 spec
-      type: String,
-      required: [true, 'Last name is required'],
-      trim: true,
-    },
+    firstName: { type: String, required: [true, 'First name is required'], trim: true },
+    lastName: { type: String, required: [true, 'Last name is required'], trim: true },
     email: {
       type: String,
       required: [true, 'Email is required'],
       unique: true,
       trim: true,
       lowercase: true,
-      // Simple email validation
-      match: [/.+@.+\..+/, 'Please enter a valid email address'],
+      match: [/.+@.+\\..+/, 'Please enter a valid email address'],
     },
-    // The Hashed Password (optional for Google OAuth users)
-    password: {
-      type: String,
-      required: false, // Not required for Google OAuth users
-      select: false, // Ensures hash is not retrieved by default queries
-      minlength: 8,
-    },
-    passwordChangedAt: Date, // Tracks last password update
-
+    // Optional password for non‑Google accounts
+    password: { type: String, required: false, select: false, minlength: 8 },
+    passwordChangedAt: Date,
     // Google OAuth fields
-    googleId: {
-      type: String,
-      sparse: true, // Allows null values but ensures uniqueness when present
-      unique: true,
-    },
-    onboardingCompleted: {
-      type: Boolean,
-      default: false,
-    },
-
-    // PIN Authentication fields
-    pin: {
-      type: String,
-      select: false, // Ensures hash is not retrieved by default queries
-    },
-    pinSetupCompleted: {
-      type: Boolean,
-      default: false,
-    },
+    googleId: { type: String, sparse: true, unique: true },
+    onboardingCompleted: { type: Boolean, default: false },
+    // PIN fields
+    pin: { type: String, select: false },
+    pinSetupCompleted: { type: Boolean, default: false },
     lastPinVerification: Date,
-
-    // Multi-household support
+    // Multi‑household support
     linkedHouseholds: [LinkedHouseholdSchema],
     sharedData: SharedDataSchema,
-
-    // Google Calendar Integration
+    // Calendar integration
     googleCalendar: {
       accessToken: String,
       refreshToken: String,
       expiryDate: Number,
-      selectedCalendarId: String, // ID of the calendar to sync with Momentum
+      selectedCalendarId: String,
     },
-
-    // Push Notifications
-    pushTokens: [{
-      type: String
-    }],
-
-    // REMOVED 'role' and 'householdRefs' as they are no longer global.
-    // Role and points are now managed *inside* the Household model.
+    // Push tokens
+    pushTokens: [{ type: String }],
   },
-  {
-    timestamps: true,
-    collection: 'familymembers', // Governance: lowercase_plural
-  },
+  { timestamps: true, collection: 'familymembers' }
 );
 
-// Pre-save hook to hash the password and PIN before saving
+// Pre‑save hook to hash password and PIN when they change
 FamilyMemberSchema.pre('save', async function (next) {
-  // Hash password if modified and exists (password is optional for Google OAuth users)
   if (this.isModified('password') && this.password) {
     this.password = await bcrypt.hash(this.password, BCRYPT_SALT_ROUNDS);
-    // Update the password change timestamp (used for invalidating old JWTs)
-    // Set it 1 second in the past to ensure JWT is created *after* this timestamp
     this.passwordChangedAt = new Date(Date.now() - 1000);
   }
-
-  // Hash PIN if modified
   if (this.isModified('pin') && this.pin) {
     this.pin = await bcrypt.hash(this.pin, BCRYPT_SALT_ROUNDS);
   }
-
   next();
 });
 
-// Instance method to compare candidate password with the stored hash
+// Compare password method
 FamilyMemberSchema.methods.comparePassword = async function (
   candidatePassword: string
 ): Promise<boolean> {
-  // 'this.password' is not available here if 'select: false' is active
-  // But since we are calling this method on a user doc where we *expect*
-  // to check the password, we assume the query explicitly selected it.
-
-  // Handle case where password might not be selected (though it should be)
   if (!this.password) {
-    // To be safe, re-fetch the document with the password
     const user = await model('FamilyMember').findById(this._id).select('+password');
     if (!user || !user.password) return false;
     return bcrypt.compare(candidatePassword, user.password);
   }
-
   return bcrypt.compare(candidatePassword, this.password);
 };
 
-// Instance method to compare candidate PIN with the stored hash
+// Compare PIN method with detailed logging
 FamilyMemberSchema.methods.comparePin = async function (
   candidatePin: string
 ): Promise<boolean> {
-  // Handle case where PIN might not be selected
+  console.log('[comparePin] Candidate PIN length:', candidatePin.length);
+  console.log('[comparePin] Stored PIN hash length:', this.pin?.length);
   if (!this.pin) {
-    // Re-fetch the document with the PIN
     const user = await model('FamilyMember').findById(this._id).select('+pin');
-    if (!user || !user.pin) return false;
-    return bcrypt.compare(candidatePin, user.pin);
+    if (!user || !user.pin) {
+      console.log('[comparePin] No PIN found on re‑fetch');
+      return false;
+    }
+    const result = await bcrypt.compare(candidatePin, user.pin);
+    console.log('[comparePin] Result after re‑fetch:', result);
+    return result;
   }
-
-  return bcrypt.compare(candidatePin, this.pin);
+  const result = await bcrypt.compare(candidatePin, this.pin);
+  console.log('[comparePin] Result:', result);
+  return result;
 };
 
-
-// Mandatory PascalCase Model name
 const FamilyMember = model<IFamilyMember>('FamilyMember', FamilyMemberSchema);
-
 export default FamilyMember;
