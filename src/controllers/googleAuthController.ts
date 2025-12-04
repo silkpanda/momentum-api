@@ -10,6 +10,7 @@ import AppError from '../utils/AppError';
 import asyncHandler from 'express-async-handler';
 import { createNewCalendar } from '../services/googleCalendarService';
 import { google } from 'googleapis';
+import bcrypt from 'bcryptjs';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -136,10 +137,15 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
 
 // Complete onboarding for Google OAuth users
 export const completeOnboarding = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    const { userId, householdId, displayName, profileColor, calendarChoice, selectedCalendarId } = req.body;
+    const { userId, householdId, householdName, inviteCode, displayName, profileColor, calendarChoice, selectedCalendarId, pin } = req.body;
 
-    if (!userId || !householdId || !displayName || !profileColor) {
+    if (!userId || !householdId || !displayName || !profileColor || !pin) {
         return next(new AppError('Missing required fields', 400));
+    }
+
+    // Validate PIN
+    if (!/^\d{4}$/.test(pin)) {
+        return next(new AppError('PIN must be exactly 4 digits', 400));
     }
 
     try {
@@ -149,13 +155,28 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
             return next(new AppError('User not found', 404));
         }
 
+        console.log('[Onboarding] Setting up PIN for user:', userId);
+        console.log('[Onboarding] PIN received:', pin ? '****' : 'MISSING');
+
+        // Hash and store PIN
+        const hashedPin = await bcrypt.hash(pin, 12);
+        familyMember.pin = hashedPin;
+        familyMember.pinSetupCompleted = true;
         familyMember.onboardingCompleted = true;
         await familyMember.save();
+
+        console.log('[Onboarding] PIN saved successfully. Hash length:', hashedPin.length);
+        console.log('[Onboarding] pinSetupCompleted:', familyMember.pinSetupCompleted);
 
         // Update household profile with chosen display name and color
         const household = await Household.findById(householdId);
         if (!household) {
             return next(new AppError('Household not found', 404));
+        }
+
+        // Update household name if provided (and not joining with invite code)
+        if (householdName && !inviteCode) {
+            household.householdName = householdName;
         }
 
         const memberProfile = household.memberProfiles.find(
