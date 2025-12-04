@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import { protect } from '../middleware/authMiddleware';
 import { restrictTo, signup, login, getMe } from '../controllers/authController'; // Import all Auth controllers
-import { googleAuth, completeOnboarding } from '../controllers/googleAuthController';
+import { googleAuth, googleOAuth, completeOnboarding } from '../controllers/googleAuthController';
 // Removed imports for createHousehold, addFamilyMember
 
 // Mandatory camelCase variable name for the Router instance
@@ -11,10 +11,12 @@ const router = Router();
 // Non-protected routes (Auth)
 // POST /api/v1/auth/signup (Parent Sign-Up)
 // POST /api/v1/auth/login (Parent Login)
-// POST /api/v1/auth/google (Google OAuth)
+// POST /api/v1/auth/google (Google OAuth - ID token flow)
+// POST /api/v1/auth/google/oauth (Google OAuth - Full OAuth flow with calendar)
 router.post('/signup', signup);
 router.post('/login', login);
 router.post('/google', googleAuth);
+router.post('/google/oauth', googleOAuth);
 
 // All routes after this middleware will be protected by JWT
 router.use(protect);

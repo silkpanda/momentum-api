@@ -19,6 +19,7 @@ import pinRouter from './routes/pin';
 import householdLinkRouter from './routes/householdLinkRoutes';
 import notificationRouter from './routes/notificationRoutes';
 import googleCalendarRouter from './routes/googleCalendarRoutes';
+import calendarManagementRouter from './routes/calendarManagementRoutes';
 
 // Import error handling
 import AppError from './utils/AppError';
@@ -179,6 +180,8 @@ app.use('/api/v1/wishlist', wishlistRouter);
 app.use('/api/v1/notifications', notificationRouter);
 // Register Google Calendar routes
 app.use('/api/v1/calendar/google', googleCalendarRouter);
+// Register Calendar Management routes (list, create, verify)
+app.use('/api/v1/calendar', calendarManagementRouter);
 
 
 // Basic Health Check Route

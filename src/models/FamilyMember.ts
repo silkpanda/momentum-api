@@ -57,6 +57,7 @@ export interface IFamilyMember extends Document {
     accessToken: string;
     refreshToken: string;
     expiryDate: number;
+    selectedCalendarId?: string; // ID of the calendar to sync with Momentum
   };
 
   // Push Notifications
@@ -182,6 +183,7 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
       accessToken: String,
       refreshToken: String,
       expiryDate: Number,
+      selectedCalendarId: String, // ID of the calendar to sync with Momentum
     },
 
     // Push Notifications
