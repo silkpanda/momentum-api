@@ -39,3 +39,12 @@ yarn-debug.log*
 
 # Metro cache/artifacts
 .metro-health-check*
+# Database utility scripts
+clear-database.ts
+check-database.ts
+check-real-database.ts
+check-linked-children.ts
+cleanup-orphaned-links.ts
+cleanup-real-data.ts
+list-and-clean-households.ts
+verify-linked-child.ts
