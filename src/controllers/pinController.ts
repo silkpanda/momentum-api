@@ -137,7 +137,37 @@ export const verifyPin = async (req: Request, res: Response) => {
         console.log('[PIN Verify] Entered PIN length:', pin.length);
 
         // Verify PIN
-        const isValid = await user.comparePin(pin);
+        // Determine member profile and user
+        let memberProfile: IHouseholdMemberProfile | null = null;
+        let userDoc: any;
+        if (member) {
+            memberProfile = member;
+            userDoc = await FamilyMember.findById(member.familyMemberId).select('+pin');
+        } else {
+            // member not found, treat memberId as FamilyMember ID
+            console.log('[PIN Verify] Member not found in household, using memberId as FamilyMember ID');
+            userDoc = await FamilyMember.findById(memberId).select('+pin');
+        }
+        if (!userDoc) {
+            return res.status(404).json({ status: 'error', message: 'User not found' });
+        }
+
+        // Check if PIN is set up
+        if (!userDoc.pin || !userDoc.pinSetupCompleted) {
+            console.log('[PIN Verify] PIN not set up:', { hasPin: !!userDoc.pin, pinSetupCompleted: userDoc.pinSetupCompleted });
+            return res.status(400).json({
+                status: 'error',
+                message: 'PIN not set up for this user',
+                requiresSetup: true,
+            });
+        }
+
+        console.log('[PIN Verify] Comparing PIN for user:', userDoc._id);
+        console.log('[PIN Verify] PIN hash length:', userDoc.pin?.length);
+        console.log('[PIN Verify] Entered PIN length:', pin.length);
+
+        // Verify PIN
+        const isValid = await userDoc.comparePin(pin);
         console.log('[PIN Verify] PIN comparison result:', isValid);
 
         if (!isValid) {
@@ -145,18 +175,18 @@ export const verifyPin = async (req: Request, res: Response) => {
         }
 
         // Update last verification timestamp
-        user.lastPinVerification = new Date();
-        await user.save();
+        userDoc.lastPinVerification = new Date();
+        await userDoc.save();
 
         res.status(200).json({
             status: 'success',
             message: 'PIN verified successfully',
             data: {
                 verified: true,
-                memberId: member._id,
-                userId: user._id,
-                firstName: member.displayName, // Use displayName from household profile
-                role: member.role,
+                memberId: memberProfile ? memberProfile._id : userDoc._id,
+                userId: userDoc._id,
+                firstName: memberProfile ? memberProfile.displayName : userDoc.firstName,
+                role: memberProfile ? memberProfile.role : undefined,
             },
         });
     } catch (error) {
