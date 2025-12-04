@@ -158,14 +158,13 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
         console.log('[Onboarding] Setting up PIN for user:', userId);
         console.log('[Onboarding] PIN received:', pin ? '****' : 'MISSING');
 
-        // Hash and store PIN
-        const hashedPin = await bcrypt.hash(pin, 12);
-        familyMember.pin = hashedPin;
+        // Store PIN (will be hashed by pre-save hook)
+        familyMember.pin = pin;
         familyMember.pinSetupCompleted = true;
         familyMember.onboardingCompleted = true;
         await familyMember.save();
 
-        console.log('[Onboarding] PIN saved successfully. Hash length:', hashedPin.length);
+        console.log('[Onboarding] PIN saved successfully');
         console.log('[Onboarding] pinSetupCompleted:', familyMember.pinSetupCompleted);
 
         // Update household profile with chosen display name and color
