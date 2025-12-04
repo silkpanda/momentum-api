@@ -168,14 +168,15 @@ FamilyMemberSchema.methods.comparePin = async function (
 ): Promise<boolean> {
   console.log('[comparePin] Candidate PIN length:', candidatePin.length);
   console.log('[comparePin] Stored PIN hash length:', this.pin?.length);
+  console.log('[comparePin] Stored PIN hash (masked):', this.pin ? this.pin.slice(0, 10) + '...' : 'none');
   if (!this.pin) {
     const user = await model('FamilyMember').findById(this._id).select('+pin');
     if (!user || !user.pin) {
-      console.log('[comparePin] No PIN found on re‑fetch');
+      console.log('[comparePin] No PIN found on re-fetch');
       return false;
     }
     const result = await bcrypt.compare(candidatePin, user.pin);
-    console.log('[comparePin] Result after re‑fetch:', result);
+    console.log('[comparePin] Result after re-fetch:', result);
     return result;
   }
   const result = await bcrypt.compare(candidatePin, this.pin);
