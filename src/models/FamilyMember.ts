@@ -110,7 +110,7 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
       unique: true,
       trim: true,
       lowercase: true,
-      match: [/.+@.+\\..+/, 'Please enter a valid email address'],
+      match: [/.+@.+\..+/, 'Please enter a valid email address'],
     },
     // Optional password for non‑Google accounts
     password: { type: String, required: false, select: false, minlength: 8 },
