@@ -1,4 +1,40 @@
-'GOOGLE_REDIRECT_URI'
+import * as dotenv from 'dotenv';
+// 1. Load Environment Variables FIRST
+dotenv.config();
+
+import express from 'express';
+import mongoose from 'mongoose';
+import { ServerApiVersion } from 'mongodb';
+import cors from 'cors';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+
+// Import routers
+import authRouter from './routes/authRoutes';
+import householdRouter from './routes/householdRoutes';
+import taskRouter from './routes/taskRoutes';
+import storeItemRouter from './routes/storeItemRoutes';
+import questRouter from './routes/questRoutes';
+import routineRouter from './routes/routineRoutes';
+import mealRouter from './routes/mealRoutes';
+import wishlistRouter from './routes/wishlistRoutes';
+import pinRouter from './routes/pin';
+import householdLinkRouter from './routes/householdLinkRoutes';
+import notificationRouter from './routes/notificationRoutes';
+import googleCalendarRouter from './routes/googleCalendarRoutes';
+import calendarManagementRouter from './routes/calendarManagementRoutes';
+
+// Import error handling
+import AppError from './utils/AppError';
+import { globalErrorHandler } from './utils/errorHandler';
+
+// 2. Validate Required Environment Variables
+const requiredEnvVars = [
+  'MONGO_URI',
+  'JWT_SECRET',
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+  'GOOGLE_REDIRECT_URI'
 ];
 
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
