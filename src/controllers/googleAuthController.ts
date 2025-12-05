@@ -12,7 +12,13 @@ import { createNewCalendar } from '../services/googleCalendarService';
 import { google } from 'googleapis';
 import bcrypt from 'bcryptjs';
 
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+// Lazy load client to ensure env vars are loaded
+const getOAuthClient = () => {
+    if (!process.env.GOOGLE_CLIENT_ID) {
+        throw new Error('GOOGLE_CLIENT_ID environment variable is not set');
+    }
+    return new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+};
 
 const signToken = (id: string, householdId: string): string => {
     const payload = { id, householdId };
@@ -31,6 +37,7 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
 
     try {
         // Verify the Google ID token
+        const client = getOAuthClient();
         const ticket = await client.verifyIdToken({
             idToken,
             audience: process.env.GOOGLE_CLIENT_ID,
@@ -288,6 +295,9 @@ export const googleOAuth = asyncHandler(async (req: Request, res: Response, next
 
         // Verify ID token to get user info
         oauth2Client.setCredentials(tokens);
+
+        // Use the same client for verification if possible, or create new one
+        const client = getOAuthClient();
         const ticket = await client.verifyIdToken({
             idToken: tokens.id_token,
             audience: process.env.GOOGLE_CLIENT_ID,
