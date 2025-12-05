@@ -159,10 +159,22 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
         console.log('[Onboarding] PIN received:', pin ? '****' : 'MISSING');
 
         // Store PIN (will be hashed by pre-save hook)
+        console.log('[Onboarding] Raw PIN before save:', pin);
         familyMember.pin = pin;
         familyMember.pinSetupCompleted = true;
         familyMember.onboardingCompleted = true;
         await familyMember.save();
+
+        // Verify the saved PIN by re-fetching
+        const verifyUser = await FamilyMember.findById(userId).select('+pin');
+        console.log('[Onboarding] PIN hash after save:', verifyUser?.pin?.slice(0, 20) + '...');
+        console.log('[Onboarding] PIN isModified after save:', familyMember.isModified('pin'));
+
+        // Test comparison immediately after save
+        if (verifyUser) {
+            const testResult = await bcrypt.compare(pin, verifyUser.pin!);
+            console.log('[Onboarding] Immediate PIN compare test:', testResult);
+        }
 
         console.log('[Onboarding] PIN saved successfully');
         console.log('[Onboarding] pinSetupCompleted:', familyMember.pinSetupCompleted);
@@ -267,6 +279,7 @@ export const googleOAuth = asyncHandler(async (req: Request, res: Response, next
         );
 
         // Exchange code for tokens
+        // Force consent to ensure we get a refresh token
         const { tokens } = await oauth2Client.getToken(code);
 
         if (!tokens.access_token || !tokens.id_token) {
@@ -342,7 +355,7 @@ export const googleOAuth = asyncHandler(async (req: Request, res: Response, next
                 onboardingCompleted: false,
                 googleCalendar: {
                     accessToken: tokens.access_token,
-                    refreshToken: tokens.refresh_token!,
+                    refreshToken: tokens.refresh_token || '', // Handle missing refresh token
                     expiryDate: tokens.expiry_date || Date.now() + 3600000,
                 },
             });
@@ -385,6 +398,7 @@ export const googleOAuth = asyncHandler(async (req: Request, res: Response, next
 
     } catch (err: any) {
         console.error('Google OAuth error:', err);
+        console.error('Error stack:', err.stack);
         return next(new AppError(`Google authentication failed: ${err.message}`, 500));
     }
 });
