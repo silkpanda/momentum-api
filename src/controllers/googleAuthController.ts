@@ -70,16 +70,27 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
         let googleCalendarTokens = null;
         if (serverAuthCode) {
             try {
-                const { tokens } = await client.getToken(serverAuthCode);
+                // Use a client with empty redirect URI for mobile/native exchange
+                // This matches what works in the exchangeCodeForTokens controller
+                const exchangeClient = new OAuth2Client(
+                    process.env.GOOGLE_CLIENT_ID,
+                    process.env.GOOGLE_CLIENT_SECRET,
+                    '' // Mobile apps typically need empty string or postmessage
+                );
+
+                console.log('Exchanging serverAuthCode for tokens...');
+                const { tokens } = await exchangeClient.getToken(serverAuthCode);
+
                 if (tokens.access_token) {
+                    console.log('Token exchange successful');
                     googleCalendarTokens = {
                         accessToken: tokens.access_token,
                         refreshToken: tokens.refresh_token,
                         expiryDate: tokens.expiry_date || Date.now() + 3600000,
                     };
                 }
-            } catch (tokenError) {
-                console.error('Failed to exchange serverAuthCode:', tokenError);
+            } catch (tokenError: any) {
+                console.error('Failed to exchange serverAuthCode:', tokenError.message);
                 // Continue login even if token exchange fails, but log it
             }
         }
