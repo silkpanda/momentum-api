@@ -29,7 +29,7 @@ const signToken = (id: string, householdId: string): string => {
 };
 
 export const googleAuth = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    const { idToken } = req.body;
+    const { idToken, serverAuthCode } = req.body;
 
     if (!idToken) {
         return next(new AppError('ID token is required', 400));
@@ -63,13 +63,48 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
         let householdId: Types.ObjectId;
         let household;
 
+        // If serverAuthCode is present, exchange it for tokens
+        let googleCalendarTokens = null;
+        if (serverAuthCode) {
+            try {
+                const { tokens } = await client.getToken(serverAuthCode);
+                if (tokens.access_token) {
+                    googleCalendarTokens = {
+                        accessToken: tokens.access_token,
+                        refreshToken: tokens.refresh_token,
+                        expiryDate: tokens.expiry_date || Date.now() + 3600000,
+                    };
+                }
+            } catch (tokenError) {
+                console.error('Failed to exchange serverAuthCode:', tokenError);
+                // Continue login even if token exchange fails, but log it
+            }
+        }
+
         if (familyMember) {
             // Existing user - login
             // Update googleId if not set (for users who signed up with email first)
             if (!familyMember.googleId) {
                 familyMember.googleId = googleId;
-                await familyMember.save();
             }
+
+            // Update calendar tokens if we got new ones
+            if (googleCalendarTokens) {
+                if (!familyMember.googleCalendar) {
+                    familyMember.googleCalendar = {
+                        accessToken: '',
+                        refreshToken: '',
+                        expiryDate: 0,
+                    };
+                }
+                familyMember.googleCalendar.accessToken = googleCalendarTokens.accessToken;
+                if (googleCalendarTokens.refreshToken) {
+                    familyMember.googleCalendar.refreshToken = googleCalendarTokens.refreshToken;
+                }
+                familyMember.googleCalendar.expiryDate = googleCalendarTokens.expiryDate;
+            }
+
+            await familyMember.save();
 
             // Find their household
             household = await Household.findOne({
@@ -88,14 +123,24 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
             isNewUser = true;
 
             // Create new user with Google auth
-            familyMember = await FamilyMember.create({
+            const newMemberData: any = {
                 firstName: firstName || 'User',
                 lastName: lastName || '',
                 email,
                 googleId,
                 onboardingCompleted: false,
                 // Password is not required for Google OAuth users
-            });
+            };
+
+            if (googleCalendarTokens) {
+                newMemberData.googleCalendar = {
+                    accessToken: googleCalendarTokens.accessToken,
+                    refreshToken: googleCalendarTokens.refreshToken || '',
+                    expiryDate: googleCalendarTokens.expiryDate,
+                };
+            }
+
+            familyMember = await FamilyMember.create(newMemberData);
 
             const parentId: Types.ObjectId = familyMember._id as Types.ObjectId;
 
