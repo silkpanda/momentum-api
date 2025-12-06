@@ -18,11 +18,18 @@ const oauth2Client = new google.auth.OAuth2(
  * @route   POST /api/v1/calendar/google/exchange-code
  * @access  Protected
  */
-export const exchangeCodeForTokens = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    const { code, userId, redirectUri } = req.body;
+export const exchangeCodeForTokens = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
+    // Check for code in 'code' or 'serverAuthCode' fields
+    const code = req.body.code || req.body.serverAuthCode;
+    const redirectUri = req.body.redirectUri;
+    const userId = req.user?._id;
 
-    if (!code || !userId) {
-        return next(new AppError('Code and userId are required', 400));
+    if (!code) {
+        return next(new AppError('Authorization code is required', 400));
+    }
+
+    if (!userId) {
+        return next(new AppError('User not authenticated', 401));
     }
 
     try {
@@ -30,13 +37,13 @@ export const exchangeCodeForTokens = asyncHandler(async (req: Request, res: Resp
         const client = new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID,
             process.env.GOOGLE_CLIENT_SECRET,
-            redirectUri || 'http://localhost:3000/auth/google/callback'
+            redirectUri || '' // Mobile apps often use empty string or specific URI for redirect
         );
 
         // Exchange authorization code for tokens
         const { tokens } = await client.getToken(code);
 
-        if (!tokens.access_token || !tokens.refresh_token) {
+        if (!tokens.access_token) {
             return next(new AppError('Failed to get tokens from Google', 500));
         }
 
@@ -56,7 +63,9 @@ export const exchangeCodeForTokens = asyncHandler(async (req: Request, res: Resp
         }
 
         familyMember.googleCalendar.accessToken = tokens.access_token;
-        familyMember.googleCalendar.refreshToken = tokens.refresh_token!;
+        if (tokens.refresh_token) {
+            familyMember.googleCalendar.refreshToken = tokens.refresh_token;
+        }
         familyMember.googleCalendar.expiryDate = tokens.expiry_date || Date.now() + 3600000;
 
         await familyMember.save();
@@ -69,6 +78,48 @@ export const exchangeCodeForTokens = asyncHandler(async (req: Request, res: Resp
     } catch (error: any) {
         console.error('Token exchange error:', error);
         return next(new AppError(`Failed to exchange code: ${error.message}`, 500));
+    }
+});
+
+/**
+ * @desc    List user's Google Calendars
+ * @route   GET /api/v1/calendar/google/list
+ * @access  Protected
+ */
+export const listCalendars = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
+    const userId = req.user?._id;
+
+    const familyMember = await FamilyMember.findById(userId);
+    if (!familyMember) {
+        return next(new AppError('User not found', 404));
+    }
+
+    if (!familyMember.googleCalendar?.accessToken) {
+        return next(new AppError('Google Calendar not connected', 400));
+    }
+
+    try {
+        oauth2Client.setCredentials({
+            access_token: familyMember.googleCalendar.accessToken,
+            refresh_token: familyMember.googleCalendar.refreshToken,
+        });
+
+        const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+        const response = await calendar.calendarList.list({
+            minAccessRole: 'writer', // User should be able to edit the calendar
+        });
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                calendars: response.data.items || [],
+            },
+        });
+
+    } catch (error: any) {
+        console.error('List calendars error:', error);
+        return next(new AppError(`Failed to list calendars: ${error.message}`, 500));
     }
 });
 
