@@ -119,6 +119,47 @@ export const listCalendars = asyncHandler(async (req: any, res: Response, next: 
 
     } catch (error: any) {
         console.error('List calendars error:', error);
+
+        // If token expired (401) or invalid_grant, try to refresh
+        // Note: invalid_grant usually means bad refresh token, but sometimes it can be a sync issue.
+        // We'll try refresh for 401 specifically, and maybe handle others if needed.
+        if (error.code === 401 && familyMember.googleCalendar?.refreshToken) {
+            try {
+                console.log('Refreshing access token for listCalendars...');
+                oauth2Client.setCredentials({
+                    refresh_token: familyMember.googleCalendar.refreshToken,
+                });
+
+                const { credentials } = await oauth2Client.refreshAccessToken();
+
+                // Update stored tokens
+                familyMember.googleCalendar.accessToken = credentials.access_token!;
+                if (credentials.expiry_date) {
+                    familyMember.googleCalendar.expiryDate = credentials.expiry_date;
+                }
+                await familyMember.save();
+
+                // Retry the request
+                const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+                const response = await calendar.calendarList.list({
+                    minAccessRole: 'writer',
+                });
+
+                res.status(200).json({
+                    status: 'success',
+                    data: {
+                        calendars: response.data.items || [],
+                    },
+                });
+                return;
+
+            } catch (refreshError: any) {
+                console.error('Token refresh error in listCalendars:', refreshError);
+                // Fallthrough to error response
+            }
+        }
+
         return next(new AppError(`Failed to list calendars: ${error.message}`, 500));
     }
 });

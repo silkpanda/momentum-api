@@ -14,10 +14,13 @@ import bcrypt from 'bcryptjs';
 
 // Lazy load client to ensure env vars are loaded
 const getOAuthClient = () => {
-    if (!process.env.GOOGLE_CLIENT_ID) {
-        throw new Error('GOOGLE_CLIENT_ID environment variable is not set');
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+        throw new Error('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables must be set');
     }
-    return new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    return new OAuth2Client(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+    );
 };
 
 const signToken = (id: string, householdId: string): string => {
