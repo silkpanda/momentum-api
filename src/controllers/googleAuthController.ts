@@ -111,10 +111,23 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
                         expiryDate: 0,
                     };
                 }
+
+                // Always update access token
                 familyMember.googleCalendar.accessToken = googleCalendarTokens.accessToken;
+
+                // Only update refresh token if we got a new one
+                // Google only provides refresh tokens on FIRST authorization
                 if (googleCalendarTokens.refreshToken) {
+                    console.log('[Google Auth] Got new refresh token');
                     familyMember.googleCalendar.refreshToken = googleCalendarTokens.refreshToken;
+                } else {
+                    console.log('[Google Auth] No new refresh token (expected after first auth)');
+                    // Keep existing refresh token if we have one
+                    if (!familyMember.googleCalendar.refreshToken) {
+                        console.warn('[Google Auth] WARNING: No refresh token available - calendar sync will fail');
+                    }
                 }
+
                 familyMember.googleCalendar.expiryDate = googleCalendarTokens.expiryDate;
             }
 
