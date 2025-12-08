@@ -464,8 +464,12 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
             }
         }
 
+        // Generate a new token with the possibly new householdId
+        const newToken = signToken(userId, actualHouseholdId);
+
         res.status(200).json({
             status: 'success',
+            token: newToken,
             data: {
                 user: familyMember,
                 household,

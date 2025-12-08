@@ -154,25 +154,25 @@ export const login = asyncHandler(async (req: Request, res: Response, next: Next
 });
 
 export const restrictTo = (...roles: Array<'Parent' | 'Child'>) => asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (!req.user || !req.householdId) {
-      return next(new AppError('Role check failed: Missing user or household context from token.', 401));
-    }
+  if (!req.user || !req.householdId) {
+    return next(new AppError('Role check failed: Missing user or household context from token.', 401));
+  }
 
-    const currentHousehold = await Household.findById(req.householdId);
-    if (!currentHousehold) {
-      return next(new AppError('Role check failed: The household associated with your token no longer exists.', 401));
-    }
+  const currentHousehold = await Household.findById(req.householdId);
+  if (!currentHousehold) {
+    return next(new AppError('Role check failed: The household associated with your token no longer exists.', 401));
+  }
 
-    const userHouseholdProfile = currentHousehold.memberProfiles.find(
-      (member) => member.familyMemberId.equals(req.user!._id as Types.ObjectId)
-    );
+  const userHouseholdProfile = currentHousehold.memberProfiles.find(
+    (member) => member.familyMemberId.equals(req.user!._id as Types.ObjectId)
+  );
 
-    if (!userHouseholdProfile || !roles.includes(userHouseholdProfile.role)) {
-      return next(new AppError('You do not have permission to perform this action in this household.', 403));
-    }
+  if (!userHouseholdProfile || !roles.includes(userHouseholdProfile.role)) {
+    return next(new AppError('You do not have permission to perform this action in this household.', 403));
+  }
 
-    next();
-  });
+  next();
+});
 
 export const getMe = asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   if (!req.user || !req.householdId) {
@@ -185,7 +185,7 @@ export const getMe = asyncHandler(async (req: AuthenticatedRequest, res: Respons
   }
 
   const memberProfile = household.memberProfiles.find(
-    (member) => member.familyMemberId.toString() === (req.user!._id as Types.ObjectId).toString()
+    (member) => member.familyMemberId && member.familyMemberId.toString() === (req.user!._id as Types.ObjectId).toString()
   );
 
   const userWithRole = {
