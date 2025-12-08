@@ -75,9 +75,9 @@ WishlistItemSchema.index({ memberId: 1, isPurchased: 1 });
 WishlistItemSchema.index({ householdId: 1 });
 
 // Virtual for progress calculation (requires member's current points)
-WishlistItemSchema.virtual('progress').get((this: IWishlistItem) => 
+WishlistItemSchema.virtual('progress').get(function (this: IWishlistItem) {
     // This will be calculated in the controller with member's current points
-     0
-);
+    return 0;
+});
 
 export default mongoose.model<IWishlistItem>('WishlistItem', WishlistItemSchema);

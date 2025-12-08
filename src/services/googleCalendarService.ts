@@ -134,3 +134,27 @@ export async function listUserCalendars(accessToken: string, refreshToken?: stri
 
     return response.data.items || [];
 }
+
+export async function verifyCalendarAccess(accessToken: string, calendarId: string, refreshToken?: string): Promise<boolean> {
+    const oauth2Client = new OAuth2Client(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken
+    });
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    try {
+        await calendar.events.list({
+            calendarId,
+            maxResults: 1, // Just try to fetch one event to verify access
+        });
+        return true;
+    } catch (error) {
+        console.error('Verify calendar access failed:', error);
+        return false;
+    }
+}
