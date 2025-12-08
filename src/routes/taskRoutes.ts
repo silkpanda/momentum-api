@@ -7,10 +7,12 @@ import {
   getTaskById,
   updateTask,
   deleteTask,
+} from '../controllers/taskController';
+import {
   completeTask,
   approveTask,
   rejectTask,
-} from '../controllers/taskController';
+} from '../controllers/taskCompletionController';
 
 const router = Router();
 
