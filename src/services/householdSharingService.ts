@@ -88,7 +88,7 @@ export const syncPointsToLinkedHouseholds = async (
                         await otherHousehold.save();
 
                         // Emit update to other household
-                        if (io) {
+                        if (io && otherMemberProfile._id) {
                             emitMemberUpdate(
                                 io,
                                 otherHouseholdId,

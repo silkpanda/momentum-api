@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 
 // Define the shape of our WebSocket events
 interface TaskEventPayload {
-    task: any;
+    task?: any;
     type?: 'create' | 'update' | 'delete' | 'reject';
     taskId?: string;
     memberUpdate?: any;
