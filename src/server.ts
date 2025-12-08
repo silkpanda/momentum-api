@@ -21,6 +21,8 @@ import householdLinkRouter from './routes/householdLinkRoutes';
 import notificationRouter from './routes/notificationRoutes';
 import googleCalendarRouter from './routes/googleCalendarRoutes';
 import calendarManagementRouter from './routes/calendarManagementRoutes';
+import dashboardRouter from './routes/dashboardRoutes';
+import familyRouter from './routes/familyRoutes';
 
 // Import error handling
 import AppError from './utils/AppError';
@@ -182,6 +184,10 @@ app.use('/api/v1/notifications', notificationRouter);
 app.use('/api/v1/calendar/google', googleCalendarRouter);
 // Register Calendar Management routes (list, create, verify)
 app.use('/api/v1/calendar', calendarManagementRouter);
+// Register Dashboard routes
+app.use('/api/v1/dashboard', dashboardRouter);
+// Register Family routes
+app.use('/api/v1/family', familyRouter);
 
 
 // Basic Health Check Route
