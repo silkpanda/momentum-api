@@ -52,8 +52,11 @@ export const globalErrorHandler = (
   }
 
   // In production, send a generic message
+  // DEBUG MODE: Showing full error to debug 500 issue
   return res.status(500).json({
     status: 'error',
     message: 'Something went wrong on the server.',
+    debugError: err instanceof Error ? err.message : err,
+    stack: err instanceof Error ? err.stack : undefined
   });
 };
