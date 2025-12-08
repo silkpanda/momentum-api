@@ -218,8 +218,14 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
 export const completeOnboarding = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const { userId, householdId, householdName, inviteCode, displayName, profileColor, calendarChoice, selectedCalendarId, pin } = req.body;
 
-    if (!userId || !householdId || !displayName || !profileColor || !pin) {
+    // Validate required fields
+    if (!userId || !displayName || !profileColor || !pin) {
         return next(new AppError('Missing required fields', 400));
+    }
+
+    // Must have either householdId OR householdName
+    if (!householdId && !householdName) {
+        return next(new AppError('Either householdId or householdName is required', 400));
     }
 
     // Validate PIN
@@ -258,25 +264,58 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
         console.log('[Onboarding] PIN saved successfully');
         console.log('[Onboarding] pinSetupCompleted:', familyMember.pinSetupCompleted);
 
-        // Update household profile with chosen display name and color
-        const household = await Household.findById(householdId);
+        // Get or create household
+        let household;
+        let actualHouseholdId = householdId;
+
+        if (householdId) {
+            // Try to find existing household
+            household = await Household.findById(householdId);
+        }
+
         if (!household) {
-            return next(new AppError('Household not found', 404));
-        }
+            // No household found - create one
+            console.log('[Onboarding] No household found, creating new household');
 
-        // Update household name if provided (and not joining with invite code)
-        if (householdName && !inviteCode) {
-            household.householdName = householdName;
-        }
+            if (!householdName) {
+                return next(new AppError('Household name is required when creating a new household', 400));
+            }
 
-        const memberProfile = household.memberProfiles.find(
-            (p) => p.familyMemberId.toString() === userId
-        );
+            const parentId: Types.ObjectId = familyMember._id as Types.ObjectId;
 
-        if (memberProfile) {
-            memberProfile.displayName = displayName;
-            memberProfile.profileColor = profileColor;
-            await household.save();
+            const creatorProfile: IHouseholdMemberProfile = {
+                familyMemberId: parentId,
+                displayName: displayName,
+                profileColor: profileColor,
+                role: 'Parent',
+                pointsTotal: 0,
+            };
+
+            household = await Household.create({
+                householdName: householdName,
+                memberProfiles: [creatorProfile],
+            });
+
+            actualHouseholdId = (household._id as Types.ObjectId).toString();
+            console.log('[Onboarding] Created new household:', actualHouseholdId);
+        } else {
+            // Update existing household
+            console.log('[Onboarding] Updating existing household');
+
+            // Update household name if provided (and not joining with invite code)
+            if (householdName && !inviteCode) {
+                household.householdName = householdName;
+            }
+
+            const memberProfile = household.memberProfiles.find(
+                (p) => p.familyMemberId.toString() === userId
+            );
+
+            if (memberProfile) {
+                memberProfile.displayName = displayName;
+                memberProfile.profileColor = profileColor;
+                await household.save();
+            }
         }
 
         // Handle calendar creation/sync based on calendarChoice
