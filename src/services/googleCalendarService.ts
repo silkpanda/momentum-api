@@ -158,3 +158,88 @@ export async function verifyCalendarAccess(accessToken: string, calendarId: stri
         return false;
     }
 }
+
+/**
+ * Create an event in Google Calendar
+ */
+export async function createGoogleCalendarEvent(
+    accessToken: string,
+    calendarId: string,
+    eventData: {
+        title: string;
+        description?: string;
+        location?: string;
+        startDate: Date;
+        endDate: Date;
+        allDay: boolean;
+        colorId?: string;
+        recurrence?: string[]; // RRULE format
+        reminderMinutes?: number;
+    },
+    refreshToken?: string
+): Promise<{ googleEventId: string }> {
+    const oauth2Client = new OAuth2Client(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken
+    });
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    // Build event object
+    const event: any = {
+        summary: eventData.title,
+        description: eventData.description,
+        location: eventData.location,
+        colorId: eventData.colorId,
+    };
+
+    // Set start and end times
+    if (eventData.allDay) {
+        // All-day events use date (not dateTime)
+        event.start = {
+            date: eventData.startDate.toISOString().split('T')[0],
+            timeZone: 'America/Chicago',
+        };
+        event.end = {
+            date: eventData.endDate.toISOString().split('T')[0],
+            timeZone: 'America/Chicago',
+        };
+    } else {
+        event.start = {
+            dateTime: eventData.startDate.toISOString(),
+            timeZone: 'America/Chicago',
+        };
+        event.end = {
+            dateTime: eventData.endDate.toISOString(),
+            timeZone: 'America/Chicago',
+        };
+    }
+
+    // Add recurrence if specified
+    if (eventData.recurrence && eventData.recurrence.length > 0) {
+        event.recurrence = eventData.recurrence;
+    }
+
+    // Add reminder if specified
+    if (eventData.reminderMinutes !== undefined) {
+        event.reminders = {
+            useDefault: false,
+            overrides: [
+                { method: 'popup', minutes: eventData.reminderMinutes },
+            ],
+        };
+    }
+
+    const response = await calendar.events.insert({
+        calendarId,
+        requestBody: event,
+    });
+
+    return {
+        googleEventId: response.data.id!,
+    };
+}

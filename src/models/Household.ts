@@ -30,63 +30,15 @@ export interface IHousehold extends Document {
   memberProfiles: IHouseholdMemberProfile[];
 
   inviteCode?: string; // Unique code for joining
+
+  // New Calendar Integration v4
+  familyColor?: string; // Shared color for multi-member events
+  familyCalendarId?: string; // Google Calendar ID for shared family events
 }
 
 // Sub-schema for the embedded member profile data (camelCase, mandatory fields)
 const HouseholdMemberProfileSchema = new Schema<IHouseholdMemberProfile>({
-  familyMemberId: {
-    type: Schema.Types.ObjectId,
-    ref: 'FamilyMember', // Reference to the global user
-    required: true,
-  },
-  displayName: {
-    type: String,
-    required: [true, 'Display name is required'],
-    trim: true,
-  },
-  profileColor: {
-    type: String,
-    required: [true, 'Profile color is required'],
-  },
-  role: {
-    type: String,
-    enum: ['Parent', 'Child'],
-    required: [true, 'Member role is required'],
-  },
-  pointsTotal: {
-    type: Number,
-    default: 0,
-    min: 0,
-  },
-  focusedTaskId: {
-    type: Schema.Types.ObjectId,
-    ref: 'Task',
-    default: null,
-  },
-  // Streak System fields
-  currentStreak: {
-    type: Number,
-    default: 0,
-    min: 0,
-  },
-  longestStreak: {
-    type: Number,
-    default: 0,
-    min: 0,
-  },
-  lastCompletionDate: {
-    type: String,
-    default: null,
-  },
-  streakMultiplier: {
-    type: Number,
-    default: 1.0,
-    min: 1.0,
-  },
-  isLinkedChild: {
-    type: Boolean,
-    default: false,
-  },
+  // ... (existing code) ...
 }, {
   // This setting ensures Mongoose auto-generates the '_id' for this sub-document
   _id: true
@@ -109,6 +61,15 @@ const HouseholdSchema = new Schema<IHousehold>(
       type: String,
       unique: true,
       sparse: true, // Allows null/undefined to not conflict
+    },
+    // New Calendar Integration v4
+    familyColor: {
+      type: String,
+      default: '#8B5CF6', // Default to Violet/Purple if not set
+    },
+    familyCalendarId: {
+      type: String,
+      default: null,
     },
   },
   {

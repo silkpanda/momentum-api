@@ -23,6 +23,7 @@ import googleCalendarRouter from './routes/googleCalendarRoutes';
 import calendarManagementRouter from './routes/calendarManagementRoutes';
 import dashboardRouter from './routes/dashboardRoutes';
 import familyRouter from './routes/familyRoutes';
+import eventRouter from './routes/eventRoutes';
 
 // Import error handling
 import AppError from './utils/AppError';
@@ -188,6 +189,8 @@ app.use('/api/v1/calendar', calendarManagementRouter);
 app.use('/api/v1/dashboard', dashboardRouter);
 // Register Family routes
 app.use('/api/v1/family', familyRouter);
+// Register Event routes
+app.use('/api/v1/events', eventRouter);
 
 
 // Basic Health Check Route

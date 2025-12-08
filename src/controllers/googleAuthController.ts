@@ -238,7 +238,20 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
 
 // Complete onboarding for Google OAuth users
 export const completeOnboarding = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
-    const { userId, householdId, householdName, inviteCode, displayName, profileColor, calendarChoice, selectedCalendarId, pin } = req.body;
+    const {
+        userId,
+        householdId,
+        householdName,
+        inviteCode,
+        displayName,
+        profileColor,
+        familyColor, // NEW
+        calendarChoice,
+        selectedCalendarId,
+        familyCalendarChoice, // NEW
+        selectedFamilyCalendarId, // NEW
+        pin
+    } = req.body;
 
     // Validate required fields
     if (!userId || !displayName || !profileColor || !pin) {
@@ -257,7 +270,7 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
 
     try {
         // Update user's onboarding status
-        const familyMember = await FamilyMember.findById(userId);
+        const familyMember = await FamilyMember.findById(userId).select('+googleCalendar');
         if (!familyMember) {
             return next(new AppError('User not found', 404));
         }
@@ -315,6 +328,7 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
 
             household = await Household.create({
                 householdName,
+                familyColor: familyColor || '#8B5CF6', // NEW: Set family color
                 memberProfiles: [creatorProfile],
             });
 
@@ -387,6 +401,44 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
                 console.error('Calendar setup error:', calendarError);
                 // Don't fail onboarding if calendar setup fails
                 // User can set it up later
+            }
+        }
+
+        // Handle FAMILY calendar creation/sync
+        if (familyCalendarChoice && familyMember.googleCalendar?.accessToken && household) {
+            try {
+                const { accessToken, refreshToken } = familyMember.googleCalendar;
+
+                if (familyCalendarChoice === 'create') {
+                    // Create new Family Calendar
+                    console.log('Creating new Family Calendar...');
+                    const familyCalName = `${householdName || 'Family'} Calendar`;
+                    const newFamilyCalendar = await createNewCalendar(
+                        accessToken,
+                        {
+                            summary: familyCalName,
+                            description: 'Shared family events and activities',
+                        },
+                        refreshToken
+                    );
+
+                    // Store in household
+                    household.familyCalendarId = newFamilyCalendar.calendarId;
+                    await household.save();
+
+                    console.log(`✅ Created family calendar: ${newFamilyCalendar.calendarId}`);
+
+                } else if (familyCalendarChoice === 'sync' && selectedFamilyCalendarId) {
+                    // Sync with existing calendar
+                    console.log(`Syncing with existing family calendar: ${selectedFamilyCalendarId}`);
+                    household.familyCalendarId = selectedFamilyCalendarId;
+                    await household.save();
+
+                    console.log(`✅ Synced with family calendar: ${selectedFamilyCalendarId}`);
+                }
+            } catch (familyCalendarError: any) {
+                console.error('Family calendar setup error:', familyCalendarError);
+                // Don't fail onboarding if family calendar setup fails
             }
         }
 

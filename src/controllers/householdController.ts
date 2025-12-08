@@ -18,7 +18,14 @@ import { createMemberCalendar, updateGoogleCalendarColor } from '../services/goo
  */
 export const createHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    const { householdName, userDisplayName, userProfileColor } = req.body;
+    const {
+      householdName,
+      userDisplayName,
+      userProfileColor,
+      familyColor,
+      calendarOption,       // { type: 'create' | 'sync', calendarId?: string }
+      familyCalendarOption  // { type: 'create' | 'sync', calendarId?: string }
+    } = req.body;
 
     const creatorFamilyMemberId = req.user?._id as Types.ObjectId;
 
@@ -43,8 +50,73 @@ export const createHousehold = asyncHandler(
 
     const household = await Household.create({
       householdName,
+      familyColor: familyColor || '#8B5CF6', // Default purple if not provided
       memberProfiles: [creatorProfile],
     });
+
+    // --- CALENDAR INTEGRATION ---
+    // We can only do this if the user is authenticated with Google
+    // Fetch full user with google tokens
+    const user = await FamilyMember.findById(creatorFamilyMemberId).select('+googleCalendar');
+
+    if (user && user.googleCalendar && user.googleCalendar.accessToken) {
+      try {
+        const { accessToken, refreshToken } = user.googleCalendar;
+
+        // 1. Personal Calendar Setup
+        if (calendarOption) {
+          let personalCalendarId: string | undefined;
+
+          if (calendarOption.type === 'create') {
+            personalCalendarId = await createMemberCalendar(
+              userDisplayName, // Calendar Name = "Dad", "Mom", "Alex"
+              userProfileColor,
+              accessToken,
+              refreshToken
+            );
+          } else if (calendarOption.type === 'sync' && calendarOption.calendarId) {
+            personalCalendarId = calendarOption.calendarId;
+            // Optionally update color to match profile
+            await updateGoogleCalendarColor(personalCalendarId!, userProfileColor, accessToken, refreshToken);
+          }
+
+          if (personalCalendarId) {
+            user.googleCalendar.selectedCalendarId = personalCalendarId;
+            await user.save();
+          }
+        }
+
+        // 2. Family Calendar Setup
+        if (familyCalendarOption) {
+          let familyCalId: string | undefined;
+          const familyCalName = `${householdName} Family`;
+
+          if (familyCalendarOption.type === 'create') {
+            // Create a new calendar for the family
+            familyCalId = await createMemberCalendar(
+              familyCalName,
+              familyColor || '#8B5CF6',
+              accessToken,
+              refreshToken
+            );
+          } else if (familyCalendarOption.type === 'sync' && familyCalendarOption.calendarId) {
+            familyCalId = familyCalendarOption.calendarId;
+            // Optionally update color
+            await updateGoogleCalendarColor(familyCalId!, familyColor || '#8B5CF6', accessToken, refreshToken);
+          }
+
+          if (familyCalId) {
+            household.familyCalendarId = familyCalId;
+            await household.save();
+          }
+        }
+
+      } catch (error) {
+        console.error('Error setting up initial calendars:', error);
+        // We do NOT throw an error here to facilitate "partial success"
+        // The household is created, even if calendar setup failed
+      }
+    }
 
     res.status(201).json(household);
   },

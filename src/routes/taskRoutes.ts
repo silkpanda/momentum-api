@@ -9,6 +9,7 @@ import {
   deleteTask,
   completeTask,
   approveTask,
+  rejectTask,
 } from '../controllers/taskController';
 
 const router = Router();
@@ -19,13 +20,14 @@ router.use(protect);
 // 2. Public Routes (Parent & Child)
 // Everyone needs to see tasks to know what to do!
 router.route('/')
-  .get(getAllTasks) 
+  .get(getAllTasks)
   .post(restrictTo('Parent'), createTask); // Only Parents create tasks
 
 router.post('/:id/complete', completeTask); // Anyone can complete
 
 // 3. Restricted Routes (Parent Only)
 router.post('/:id/approve', restrictTo('Parent'), approveTask);
+router.post('/:id/reject', restrictTo('Parent'), rejectTask);
 
 router
   .route('/:id')
