@@ -38,7 +38,51 @@ export interface IHousehold extends Document {
 
 // Sub-schema for the embedded member profile data (camelCase, mandatory fields)
 const HouseholdMemberProfileSchema = new Schema<IHouseholdMemberProfile>({
-  // ... (existing code) ...
+  familyMemberId: {
+    type: Schema.Types.ObjectId,
+    ref: 'FamilyMember',
+    required: true,
+  },
+  displayName: {
+    type: String,
+    required: true,
+  },
+  profileColor: {
+    type: String,
+    required: true,
+  },
+  role: {
+    type: String,
+    enum: ['Parent', 'Child'],
+    required: true,
+  },
+  pointsTotal: {
+    type: Number,
+    default: 0,
+  },
+  focusedTaskId: {
+    type: Schema.Types.ObjectId,
+    ref: 'Task',
+  },
+  currentStreak: {
+    type: Number,
+    default: 0,
+  },
+  longestStreak: {
+    type: Number,
+    default: 0,
+  },
+  lastCompletionDate: {
+    type: String,
+  },
+  streakMultiplier: {
+    type: Number,
+    default: 1.0,
+  },
+  isLinkedChild: {
+    type: Boolean,
+    default: false,
+  },
 }, {
   // This setting ensures Mongoose auto-generates the '_id' for this sub-document
   _id: true
