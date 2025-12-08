@@ -96,7 +96,15 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
             } catch (tokenError: any) {
                 console.error('Failed to exchange serverAuthCode:', tokenError.message);
                 console.error('Detailed token error:', JSON.stringify(tokenError, null, 2));
-                // Continue login even if token exchange fails, but log it
+
+                // CRITICAL: If exchange fails, we must signal to clear existing tokens
+                // so we don't leave the user in a broken state with an invalid refresh token
+                googleCalendarTokens = {
+                    accessToken: '',
+                    refreshToken: '',
+                    expiryDate: 0,
+                    error: true // flag to indicate failure
+                };
             }
         } else {
             console.log('[Google Auth] No serverAuthCode provided in request body');
@@ -119,23 +127,30 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
                     };
                 }
 
-                // Always update access token
-                familyMember.googleCalendar.accessToken = googleCalendarTokens.accessToken;
-
-                // Only update refresh token if we got a new one
-                // Google only provides refresh tokens on FIRST authorization
-                if (googleCalendarTokens.refreshToken) {
-                    console.log('[Google Auth] Got new refresh token');
-                    familyMember.googleCalendar.refreshToken = googleCalendarTokens.refreshToken;
+                if ((googleCalendarTokens as any).error) {
+                    console.warn('[Google Auth] Token exchange failed - clearing stored tokens to prevent loop');
+                    familyMember.googleCalendar.accessToken = '';
+                    familyMember.googleCalendar.refreshToken = '';
+                    familyMember.googleCalendar.expiryDate = 0;
                 } else {
-                    console.log('[Google Auth] No new refresh token (expected after first auth)');
-                    // Keep existing refresh token if we have one
-                    if (!familyMember.googleCalendar.refreshToken) {
-                        console.warn('[Google Auth] WARNING: No refresh token available - calendar sync will fail');
-                    }
-                }
+                    // Always update access token
+                    familyMember.googleCalendar.accessToken = googleCalendarTokens.accessToken;
 
-                familyMember.googleCalendar.expiryDate = googleCalendarTokens.expiryDate;
+                    // Only update refresh token if we got a new one
+                    // Google only provides refresh tokens on FIRST authorization
+                    if (googleCalendarTokens.refreshToken) {
+                        console.log('[Google Auth] Got new refresh token');
+                        familyMember.googleCalendar.refreshToken = googleCalendarTokens.refreshToken;
+                    } else {
+                        console.log('[Google Auth] No new refresh token (expected after first auth)');
+                        // Keep existing refresh token if we have one
+                        if (!familyMember.googleCalendar.refreshToken) {
+                            console.warn('[Google Auth] WARNING: No refresh token available - calendar sync will fail');
+                        }
+                    }
+
+                    familyMember.googleCalendar.expiryDate = googleCalendarTokens.expiryDate;
+                }
             }
 
             await familyMember.save();
