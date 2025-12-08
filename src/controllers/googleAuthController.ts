@@ -162,10 +162,32 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
             });
 
             if (!household) {
-                return next(new AppError('User does not belong to any household as a Parent.', 401));
-            }
+                // RECOVERY: User exists but has no household (orphaned). Create one.
+                console.warn(`User ${familyMember._id} exists but has no household. Creating default recovery household.`);
 
-            householdId = household._id as Types.ObjectId;
+                const parentId: Types.ObjectId = familyMember._id as Types.ObjectId;
+
+                const creatorProfile: IHouseholdMemberProfile = {
+                    familyMemberId: parentId,
+                    displayName: firstName || 'User',
+                    profileColor: '#6366f1',
+                    role: 'Parent',
+                    pointsTotal: 0,
+                };
+
+                household = await Household.create({
+                    householdName: `${firstName}'s Household`,
+                    memberProfiles: [creatorProfile],
+                });
+
+                householdId = household._id as Types.ObjectId;
+
+                // Reset onboarding status so they go through setup again to fix things
+                familyMember.onboardingCompleted = false;
+                await familyMember.save();
+            } else {
+                householdId = household._id as Types.ObjectId;
+            }
 
         } else {
             // New user - signup
