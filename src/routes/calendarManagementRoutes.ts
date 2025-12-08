@@ -3,8 +3,8 @@
 // Routes for calendar selection and creation during onboarding
 // =========================================================
 import express, { Request, Response, NextFunction } from 'express';
-import { protect } from '../middleware/authMiddleware';
 import asyncHandler from 'express-async-handler';
+import { protect } from '../middleware/authMiddleware';
 import AppError from '../utils/AppError';
 import FamilyMember from '../models/FamilyMember';
 import {

@@ -17,7 +17,7 @@ import ChildLinkCode from '../models/ChildLinkCode';
 export const generateLinkCode = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
         const { childId } = req.body;
-        const householdId = req.householdId;
+        const {householdId} = req;
         const parentId = req.user!._id;
 
         if (!childId) {
@@ -159,7 +159,7 @@ export const validateLinkCode = asyncHandler(
 export const linkExistingChild = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
         const { code, displayName, profileColor } = req.body;
-        const householdId = req.householdId;
+        const {householdId} = req;
         const parentId = req.user!._id;
 
         if (!code || !displayName || !profileColor) {
@@ -304,7 +304,7 @@ export const linkExistingChild = asyncHandler(
 export const getLinkSettings = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
         const { linkId } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const link = await HouseholdLink.findById(linkId)
             .populate('childId', 'firstName lastName')
@@ -338,7 +338,7 @@ export const getLinkSettings = asyncHandler(
  */
 export const getHouseholdLinks = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const links = await HouseholdLink.find({
             $or: [{ household1: householdId }, { household2: householdId }],
@@ -367,7 +367,7 @@ export const proposeSettingChange = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
         const { linkId } = req.params;
         const { setting, newValue } = req.body;
-        const householdId = req.householdId;
+        const {householdId} = req;
         const parentId = req.user!._id;
 
         if (!setting || !newValue) {
@@ -483,7 +483,7 @@ export const proposeSettingChange = asyncHandler(
 export const approveChange = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
         const { linkId, changeId } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const link = await HouseholdLink.findById(linkId);
         if (!link) {
@@ -542,7 +542,7 @@ export const approveChange = asyncHandler(
 export const rejectChange = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
         const { linkId, changeId } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const link = await HouseholdLink.findById(linkId);
         if (!link) {
@@ -594,7 +594,7 @@ export const rejectChange = asyncHandler(
 export const unlinkChild = asyncHandler(
     async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
         const { childId } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         // Find the link
         const link = await HouseholdLink.findOne({

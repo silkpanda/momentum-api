@@ -2,9 +2,9 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import asyncHandler from 'express-async-handler'; // Required for protect function
+import { Types } from 'mongoose';
 import FamilyMember, { IFamilyMember } from '../models/FamilyMember';
 import AppError from '../utils/AppError';
-import { Types } from 'mongoose';
 import { JWT_SECRET } from '../config/constants'; // Import JWT_SECRET
 
 // Define the shape of the user payload stored in the JWT

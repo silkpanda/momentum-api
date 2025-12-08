@@ -228,7 +228,7 @@ QuestSchema.methods.checkAndProcessRecurrence = function () {
 
         // Calculate next reset
         const lastReset = this.recurrence.nextReset; // The one that just passed
-        let nextReset = new Date(lastReset);
+        const nextReset = new Date(lastReset);
 
         // Loop to find the next future reset time
         while (nextReset <= now) {

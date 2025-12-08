@@ -51,13 +51,13 @@ export const calculateStreakChange = (
     if (daysDifference === 0) {
         // Same day - no change to streak
         return 'maintain';
-    } else if (daysDifference === 1 && completedToday) {
+    } if (daysDifference === 1 && completedToday) {
         // Consecutive day - increment streak
         return 'increment';
-    } else {
+    } 
         // Missed a day - reset streak
         return completedToday ? 'reset' : 'reset';
-    }
+    
 };
 
 /**
@@ -115,6 +115,4 @@ export const updateMemberStreak = (
 /**
  * Apply multiplier to points
  */
-export const applyMultiplier = (basePoints: number, multiplier: number): number => {
-    return Math.floor(basePoints * multiplier);
-};
+export const applyMultiplier = (basePoints: number, multiplier: number): number => Math.floor(basePoints * multiplier);

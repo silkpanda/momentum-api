@@ -1,119 +1,136 @@
-// =========================================================
-// src/services/googleCalendarService.ts
-// Google Calendar API Service
-// =========================================================
+
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
 
-const oauth2Client = new OAuth2Client(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
-);
+// Color mapping: Our hex colors to Google Calendar color IDs
+// See: https://lukeboyle.com/blog/posts/google-calendar-api-color-id
+const COLOR_MAP: { [key: string]: string } = {
+    '#EF4444': '11', // Red -> Tomato
+    '#F97316': '6',  // Orange -> Tangerine
+    '#F59E0B': '5',  // Amber -> Banana
+    '#10B981': '10', // Emerald -> Basil
+    '#06B6D4': '7',  // Cyan -> Peacock
+    '#3B82F6': '9',  // Blue -> Blueberry
+    '#6366F1': '1',  // Indigo -> Lavender
+    '#8B5CF6': '3',  // Violet -> Grape
+    '#EC4899': '4',  // Pink -> Flamingo
+    '#6B7280': '8',  // Gray -> Graphite
+};
 
-export interface CalendarListItem {
-    id: string;
-    summary: string;
-    description?: string;
-    primary?: boolean;
-    backgroundColor?: string;
+function getClosestGoogleColor(hexColor: string): string {
+    // If exact match found, return it
+    if (COLOR_MAP[hexColor]) return COLOR_MAP[hexColor];
+
+    // Default to Blueberry (Blue) if no match
+    return '9';
 }
 
-export interface CreateCalendarParams {
-    summary: string;
-    description?: string;
-    timeZone?: string;
-}
-
-/**
- * List all calendars for the authenticated user
- */
-export async function listUserCalendars(accessToken: string): Promise<CalendarListItem[]> {
-    oauth2Client.setCredentials({ access_token: accessToken });
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-
-    try {
-        const response = await calendar.calendarList.list({
-            minAccessRole: 'owner', // Only show calendars the user owns
-        });
-
-        const calendars: CalendarListItem[] = (response.data.items || []).map(item => ({
-            id: item.id || '',
-            summary: item.summary || '',
-            description: item.description || undefined,
-            primary: item.primary || undefined,
-            backgroundColor: item.backgroundColor || undefined,
-        }));
-
-        return calendars;
-    } catch (error: any) {
-        console.error('Error listing calendars:', error);
-        throw new Error(`Failed to list calendars: ${error.message}`);
-    }
-}
-
-/**
- * Create a new Google Calendar
- */
 export async function createNewCalendar(
     accessToken: string,
-    params: CreateCalendarParams
-): Promise<{ calendarId: string; summary: string }> {
-    oauth2Client.setCredentials({ access_token: accessToken });
+    details: { summary: string; description?: string; colorRgbFormat?: boolean },
+    refreshToken?: string
+): Promise<{ calendarId: string }> {
+    const oauth2Client = new OAuth2Client(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken
+    });
+
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
+    const response = await calendar.calendars.insert({
+        requestBody: {
+            summary: details.summary,
+            description: details.description,
+            timeZone: 'America/Chicago', // We might want to make this dynamic later
+        },
+    });
+
+    return { calendarId: response.data.id! };
+}
+
+export async function createMemberCalendar(
+    name: string,
+    hexColor: string,
+    accessToken: string,
+    refreshToken?: string
+): Promise<string> {
+    const oauth2Client = new OAuth2Client(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken
+    });
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    // Create the calendar
+    const response = await calendar.calendars.insert({
+        requestBody: {
+            summary: name,
+            timeZone: 'America/Chicago', // Default for now
+        },
+    });
+
+    const calendarId = response.data.id!;
+
+    // Set calendar color
+    await updateGoogleCalendarColor(calendarId, hexColor, accessToken, refreshToken);
+
+    return calendarId;
+}
+
+export async function updateGoogleCalendarColor(
+    calendarId: string,
+    hexColor: string,
+    accessToken: string,
+    refreshToken?: string
+): Promise<void> {
+    const oauth2Client = new OAuth2Client(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken
+    });
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    const googleColorId = getClosestGoogleColor(hexColor);
+
     try {
-        const response = await calendar.calendars.insert({
+        await calendar.calendarList.update({
+            calendarId,
             requestBody: {
-                summary: params.summary,
-                description: params.description,
-                timeZone: params.timeZone || 'America/Chicago',
+                colorId: googleColorId,
             },
         });
-
-        return {
-            calendarId: response.data.id || '',
-            summary: response.data.summary || '',
-        };
-    } catch (error: any) {
-        console.error('Error creating calendar:', error);
-        throw new Error(`Failed to create calendar: ${error.message}`);
+    } catch (error) {
+        console.error('Error updating calendar color:', error);
     }
 }
 
-/**
- * Get calendar details by ID
- */
-export async function getCalendarById(
-    accessToken: string,
-    calendarId: string
-): Promise<CalendarListItem | null> {
-    oauth2Client.setCredentials({ access_token: accessToken });
+export async function listUserCalendars(accessToken: string, refreshToken?: string): Promise<any[]> {
+    const oauth2Client = new OAuth2Client(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken
+    });
+
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    try {
-        const response = await calendar.calendars.get({
-            calendarId,
-        });
+    const response = await calendar.calendarList.list({
+        minAccessRole: 'writer', // Only show calendars we can edit
+    });
 
-        return {
-            id: response.data.id || '',
-            summary: response.data.summary || '',
-            description: response.data.description || undefined,
-        };
-    } catch (error: any) {
-        console.error('Error getting calendar:', error);
-        return null;
-    }
-}
-
-/**
- * Verify user has access to a calendar
- */
-export async function verifyCalendarAccess(
-    accessToken: string,
-    calendarId: string
-): Promise<boolean> {
-    const calendar = await getCalendarById(accessToken, calendarId);
-    return calendar !== null;
+    return response.data.items || [];
 }

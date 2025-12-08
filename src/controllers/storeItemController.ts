@@ -16,7 +16,7 @@ const handleResponse = (res: Response, status: number, message: string, data?: a
 /** Get all StoreItems for the authenticated user's household */
 export const getAllStoreItems = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const householdId = req.householdId;
+    const {householdId} = req;
     if (!householdId) {
       handleResponse(res, 400, 'Household context is missing from request.');
       return;
@@ -40,7 +40,7 @@ export const createStoreItem = async (req: AuthenticatedRequest, res: Response):
       handleResponse(res, 400, 'Missing mandatory fields: itemName and cost.');
       return;
     }
-    const householdId = req.householdId;
+    const {householdId} = req;
     if (!householdId) {
       handleResponse(res, 400, 'Household context is missing from request.');
       return;
@@ -66,7 +66,7 @@ export const createStoreItem = async (req: AuthenticatedRequest, res: Response):
 export const getStoreItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const itemId = req.params.id;
-    const householdId = req.householdId;
+    const {householdId} = req;
     const item = await StoreItem.findOne({ _id: itemId, householdRefId: householdId });
     if (!item) {
       handleResponse(res, 404, 'Store item not found or does not belong to your household.');
@@ -86,7 +86,7 @@ export const getStoreItem = async (req: AuthenticatedRequest, res: Response): Pr
 export const updateStoreItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const itemId = req.params.id;
-    const householdId = req.householdId;
+    const {householdId} = req;
     const updates = { ...req.body };
     delete updates.householdRefId; // never allow changing household linkage
     const updatedItem = await StoreItem.findOneAndUpdate(
@@ -114,7 +114,7 @@ export const updateStoreItem = async (req: AuthenticatedRequest, res: Response):
 export const deleteStoreItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const itemId = req.params.id;
-    const householdId = req.householdId;
+    const {householdId} = req;
     const deletedItem = await StoreItem.findOneAndDelete({ _id: itemId, householdRefId: householdId });
     if (!deletedItem) {
       handleResponse(res, 404, 'Store item not found or does not belong to your household.');

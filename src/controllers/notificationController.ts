@@ -85,9 +85,9 @@ export const markAllAsRead = asyncHandler(async (req: AuthenticatedRequest, res:
  * @access  Private
  */
 export const sendParentReminder = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const householdId = req.householdId;
+    const {householdId} = req;
     const userId = req.user?._id;
-    const user = req.user;
+    const {user} = req;
 
     if (!householdId) {
         throw new AppError('Household context required', 400);
@@ -106,8 +106,7 @@ export const sendParentReminder = asyncHandler(async (req: AuthenticatedRequest,
     }
 
     // Create notifications for all parents
-    const notifications = await Promise.all(parents.map(async (parent) => {
-        return await Notification.create({
+    const notifications = await Promise.all(parents.map(async (parent) => Notification.create({
             recipientId: parent.familyMemberId,
             householdId,
             type: NotificationType.REMINDER,
@@ -115,8 +114,7 @@ export const sendParentReminder = asyncHandler(async (req: AuthenticatedRequest,
             message: `${user?.firstName || 'A child'} needs your help!`,
             data: { fromMemberId: userId },
             isRead: false
-        });
-    }));
+        })));
 
     // Emit to the household room via Socket.IO
     io.to(householdId.toString()).emit('notification', {

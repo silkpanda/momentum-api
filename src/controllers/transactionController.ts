@@ -31,7 +31,7 @@ export const purchaseStoreItem = async (req: AuthenticatedRequest, res: Response
     const itemId = req.params.id;
     const { memberId } = req.body; // The member who is purchasing the item
 
-    const householdId = req.householdId;
+    const {householdId} = req;
 
     if (!householdId || !memberId) {
       handleResponse(res, 400, 'Missing household context or member ID.', {});
@@ -109,7 +109,7 @@ export const purchaseStoreItem = async (req: AuthenticatedRequest, res: Response
     io.emit('member_points_updated', {
       memberId: updatedMemberProfile?._id,
       pointsTotal: newPointsTotal,
-      householdId: householdId,
+      householdId,
     });
 
     res.status(200).json({

@@ -2,12 +2,12 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { Types } from 'mongoose';
+import asyncHandler from 'express-async-handler';
 import FamilyMember from '../models/FamilyMember';
 import Household, { IHouseholdMemberProfile } from '../models/Household';
 import { JWT_SECRET, JWT_EXPIRES_IN } from '../config/constants';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import AppError from '../utils/AppError';
-import asyncHandler from 'express-async-handler';
 
 const signToken = (id: string, householdId: string): string => {
   const payload = { id, householdId };
@@ -98,7 +98,7 @@ export const signup = asyncHandler(async (req: Request, res: Response, next: Nex
       token,
       data: {
         parent: userWithRole,
-        household: household,
+        household,
       },
     });
 
@@ -153,8 +153,7 @@ export const login = asyncHandler(async (req: Request, res: Response, next: Next
   });
 });
 
-export const restrictTo = (...roles: Array<'Parent' | 'Child'>) => {
-  return asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const restrictTo = (...roles: Array<'Parent' | 'Child'>) => asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user || !req.householdId) {
       return next(new AppError('Role check failed: Missing user or household context from token.', 401));
     }
@@ -174,7 +173,6 @@ export const restrictTo = (...roles: Array<'Parent' | 'Child'>) => {
 
     next();
   });
-};
 
 export const getMe = asyncHandler(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   if (!req.user || !req.householdId) {

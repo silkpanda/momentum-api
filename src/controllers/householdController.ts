@@ -9,6 +9,7 @@ import StoreItem from '../models/StoreItem'; // Required for cleanup
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import AppError from '../utils/AppError';
 import { io } from '../server'; // Import Socket.io instance
+import { createMemberCalendar, updateGoogleCalendarColor } from '../services/googleCalendarService';
 
 /**
  * @desc    Create a new household
@@ -56,7 +57,7 @@ export const createHousehold = asyncHandler(
  */
 export const getMyHouseholds = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    const householdId = req.householdId;
+    const { householdId } = req;
 
     if (!householdId) {
       throw new AppError('Household context not found in session token.', 401);
@@ -223,7 +224,7 @@ export const deleteHousehold = asyncHandler(
 export const addMemberToHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { householdId } = req.params;
-    let { familyMemberId, firstName, displayName, profileColor, role } = req.body;
+    let { familyMemberId, firstName, displayName, profileColor, role, calendarOption } = req.body;
 
     const loggedInUserId = req.user?._id as Types.ObjectId;
 
@@ -241,21 +242,22 @@ export const addMemberToHousehold = asyncHandler(
     }
 
     if (!familyMemberId) {
-      if (role !== 'Child') {
-        throw new AppError(
-          'Only the "Child" role can be created through this endpoint without a familyMemberId.',
-          400,
-        );
-      }
+      // Allow creating both Child AND Parent roles without an existing profile
+      // This supports the flow where a parent adds a co-parent or another child profile
 
-      const newChild = await FamilyMember.create({
+      const emailPrefix = firstName.toLowerCase().replace(/\s/g, '');
+      const roleSuffix = role.toLowerCase();
+
+      const newMember = await FamilyMember.create({
         firstName,
         lastName: 'Household',
-        email: `${firstName.toLowerCase().replace(/\s/g, '')}-child-${new Date().getTime()}@momentum.com`,
+        email: `${emailPrefix}-${roleSuffix}-${new Date().getTime()}@momentum.com`,
         password: `temp-${Math.random()}`,
+        onboardingCompleted: false,
+        pinSetupCompleted: false,
       });
 
-      familyMemberId = newChild._id;
+      familyMemberId = newMember._id;
     }
 
     const household = await Household.findById(householdId);
@@ -311,6 +313,59 @@ export const addMemberToHousehold = asyncHandler(
 
     // Emit real-time update
     io.emit('household_updated', { type: 'member_add', householdId, member: finalHousehold.memberProfiles.find((p) => p.familyMemberId.equals(familyMemberId)) });
+
+    // Handle Calendar Integration
+    if (calendarOption && loggedInUserId) {
+      try {
+        // Fetch logged-in user to get their Google Tokens
+        const loggedInUser = await FamilyMember.findById(loggedInUserId).select('+googleCalendar');
+
+        if (loggedInUser?.googleCalendar?.accessToken) {
+          const memberToUpdate = await FamilyMember.findById(familyMemberId);
+
+          if (memberToUpdate) {
+            let calendarId: string | undefined;
+
+            // FamilyMember document doesn't have displayName/profileColor (stored in Household)
+            // We use the values provided in the request or fallback to firstName/default
+            const nameForCalendar = displayName || firstName || memberToUpdate.firstName || 'Member';
+            const colorForCalendar = profileColor || '#3B82F6';
+
+            if (calendarOption.type === 'create') {
+              calendarId = await createMemberCalendar(
+                nameForCalendar,
+                colorForCalendar,
+                loggedInUser.googleCalendar.accessToken,
+                loggedInUser.googleCalendar.refreshToken
+              );
+            } else if (calendarOption.type === 'sync' && calendarOption.calendarId) {
+              calendarId = calendarOption.calendarId as string;
+              await updateGoogleCalendarColor(
+                calendarId,
+                colorForCalendar,
+                loggedInUser.googleCalendar.accessToken,
+                loggedInUser.googleCalendar.refreshToken
+              );
+            }
+
+            if (calendarId) {
+              if (!memberToUpdate.googleCalendar) {
+                memberToUpdate.googleCalendar = {
+                  accessToken: '',
+                  refreshToken: '',
+                  expiryDate: 0
+                };
+              }
+              memberToUpdate.googleCalendar.selectedCalendarId = calendarId;
+              await memberToUpdate.save();
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to setup calendar for new member:', error);
+        // Don't fail the request, just log error
+      }
+    }
 
     res.status(201).json({
       status: 'success',
@@ -576,7 +631,7 @@ export const joinHousehold = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { inviteCode } = req.body;
     const userId = req.user?._id as Types.ObjectId;
-    const user = req.user;
+    const { user } = req;
 
     if (!inviteCode) throw new AppError('Invite code is required', 400);
 

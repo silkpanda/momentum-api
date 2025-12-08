@@ -4,9 +4,9 @@
 // =========================================================
 import { Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
+import asyncHandler from 'express-async-handler';
 import FamilyMember from '../models/FamilyMember';
 import AppError from '../utils/AppError';
-import asyncHandler from 'express-async-handler';
 
 const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
@@ -21,7 +21,7 @@ const oauth2Client = new google.auth.OAuth2(
 export const exchangeCodeForTokens = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
     // Check for code in 'code' or 'serverAuthCode' fields
     const code = req.body.code || req.body.serverAuthCode;
-    const redirectUri = req.body.redirectUri;
+    const { redirectUri } = req.body;
     const userId = req.user?._id;
 
     if (!code) {
@@ -185,8 +185,9 @@ export const listCalendars = asyncHandler(async (req: any, res: Response, next: 
                 return;
 
             } catch (refreshError: any) {
-                console.error('[Google Calendar] Token refresh failed:', refreshError.message);
-                return next(new AppError('Calendar access expired. Please reconnect your Google account.', 401));
+                console.error('[Google Calendar] Token refresh failed detailed:', JSON.stringify(refreshError, null, 2));
+                console.error('[Google Calendar] Token refresh failed message:', refreshError.message);
+                return next(new AppError('Calendar access expired. Please reconnect your Google account by logging out and back in.', 401));
             }
         }
 

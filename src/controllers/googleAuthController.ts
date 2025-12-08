@@ -3,14 +3,14 @@ import { Request, Response, NextFunction } from 'express';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { Types } from 'mongoose';
 import { OAuth2Client } from 'google-auth-library';
+import asyncHandler from 'express-async-handler';
+import { google } from 'googleapis';
+import bcrypt from 'bcryptjs';
 import FamilyMember from '../models/FamilyMember';
 import Household, { IHouseholdMemberProfile } from '../models/Household';
 import { JWT_SECRET, JWT_EXPIRES_IN } from '../config/constants';
 import AppError from '../utils/AppError';
-import asyncHandler from 'express-async-handler';
 import { createNewCalendar } from '../services/googleCalendarService';
-import { google } from 'googleapis';
-import bcrypt from 'bcryptjs';
 
 // Lazy load client to ensure env vars are loaded
 const getOAuthClient = () => {
@@ -81,6 +81,10 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
                 console.log('Exchanging serverAuthCode for tokens...');
                 const { tokens } = await exchangeClient.getToken(serverAuthCode);
 
+                console.log('Token exchange result keys:', Object.keys(tokens));
+                console.log('Has access_token:', !!tokens.access_token);
+                console.log('Has refresh_token:', !!tokens.refresh_token);
+
                 if (tokens.access_token) {
                     console.log('Token exchange successful');
                     googleCalendarTokens = {
@@ -91,8 +95,11 @@ export const googleAuth = asyncHandler(async (req: Request, res: Response, next:
                 }
             } catch (tokenError: any) {
                 console.error('Failed to exchange serverAuthCode:', tokenError.message);
+                console.error('Detailed token error:', JSON.stringify(tokenError, null, 2));
                 // Continue login even if token exchange fails, but log it
             }
+        } else {
+            console.log('[Google Auth] No serverAuthCode provided in request body');
         }
 
         if (familyMember) {
@@ -252,7 +259,7 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
 
         // Verify the saved PIN by re-fetching
         const verifyUser = await FamilyMember.findById(userId).select('+pin');
-        console.log('[Onboarding] PIN hash after save:', verifyUser?.pin?.slice(0, 20) + '...');
+        console.log('[Onboarding] PIN hash after save:', `${verifyUser?.pin?.slice(0, 20)}...`);
         console.log('[Onboarding] PIN isModified after save:', familyMember.isModified('pin'));
 
         // Test comparison immediately after save
@@ -285,14 +292,14 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
 
             const creatorProfile: IHouseholdMemberProfile = {
                 familyMemberId: parentId,
-                displayName: displayName,
-                profileColor: profileColor,
+                displayName,
+                profileColor,
                 role: 'Parent',
                 pointsTotal: 0,
             };
 
             household = await Household.create({
-                householdName: householdName,
+                householdName,
                 memberProfiles: [creatorProfile],
             });
 
@@ -329,7 +336,8 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
                         {
                             summary: 'Momentum Family Calendar',
                             description: 'Calendar for family tasks and events',
-                        }
+                        },
+                        familyMember.googleCalendar.refreshToken
                     );
 
                     // Store the new calendar ID

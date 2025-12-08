@@ -1,6 +1,4 @@
 import * as dotenv from 'dotenv';
-// 1. Load Environment Variables FIRST
-dotenv.config();
 
 import express from 'express';
 import mongoose from 'mongoose';
@@ -27,6 +25,8 @@ import calendarManagementRouter from './routes/calendarManagementRoutes';
 // Import error handling
 import AppError from './utils/AppError';
 import { globalErrorHandler } from './utils/errorHandler';
+// 1. Load Environment Variables FIRST
+dotenv.config();
 
 // 2. Validate Required Environment Variables
 const requiredEnvVars = [

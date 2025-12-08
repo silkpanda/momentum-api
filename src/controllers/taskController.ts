@@ -18,7 +18,7 @@ import { updateMemberStreak, applyMultiplier } from '../utils/streakCalculator';
 export const createTask = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const { title, description, pointsValue, assignedTo, dueDate } = req.body;
-    const householdId = req.householdId; // From JWT
+    const {householdId} = req; // From JWT
 
     if (!title || pointsValue === undefined || !assignedTo || assignedTo.length === 0) {
       throw new AppError(
@@ -57,10 +57,10 @@ export const createTask = asyncHandler(
  */
 export const getAllTasks = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
-    const householdId = req.householdId; // From JWT
+    const {householdId} = req; // From JWT
 
     // 1. Fetch local tasks
-    let tasks = await Task.find({ householdId: householdId })
+    let tasks = await Task.find({ householdId })
       .populate('assignedTo', 'displayName profileColor') // Populate member details
       .sort({ createdAt: -1 });
 
@@ -126,9 +126,9 @@ export const getAllTasks = asyncHandler(
 export const getTaskById = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const taskId = req.params.id;
-    const householdId = req.householdId;
+    const {householdId} = req;
 
-    const task = await Task.findOne({ _id: taskId, householdId: householdId })
+    const task = await Task.findOne({ _id: taskId, householdId })
       .populate('assignedTo', 'displayName profileColor');
 
     if (!task) {
@@ -155,13 +155,13 @@ export const getTask = getTaskById;
 export const updateTask = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const taskId = req.params.id;
-    const householdId = req.householdId;
+    const {householdId} = req;
 
     // Parents can update these fields
     const { title, description, pointsValue, assignedTo, dueDate, status } = req.body;
 
     const task = await Task.findOneAndUpdate(
-      { _id: taskId, householdId: householdId },
+      { _id: taskId, householdId },
       { title, description, pointsValue, assignedTo, dueDate, status },
       { new: true, runValidators: true },
     );
@@ -191,11 +191,11 @@ export const updateTask = asyncHandler(
 export const deleteTask = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const taskId = req.params.id;
-    const householdId = req.householdId;
+    const {householdId} = req;
 
     const task = await Task.findOneAndDelete({
       _id: taskId,
-      householdId: householdId,
+      householdId,
     });
 
     if (!task) {
@@ -225,7 +225,7 @@ export const deleteTask = asyncHandler(
 export const completeTask = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const taskId = req.params.id;
-    const householdId = req.householdId;
+    const {householdId} = req;
     const loggedInUserId = req.user?._id as Types.ObjectId;
     const { memberId } = req.body;
 
@@ -258,7 +258,7 @@ export const completeTask = asyncHandler(
     }
 
     // 3. Find the task
-    const task = await Task.findOne({ _id: taskId, householdId: householdId });
+    const task = await Task.findOne({ _id: taskId, householdId });
     if (!task) {
       throw new AppError('Task not found.', 404);
     }
@@ -376,12 +376,12 @@ export const completeTask = asyncHandler(
 export const approveTask = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const taskId = req.params.id;
-    const householdId = req.householdId;
+    const {householdId} = req;
 
     // 1. Find the task
     const task = await Task.findOne({
       _id: taskId,
-      householdId: householdId,
+      householdId,
       status: 'PendingApproval', // Can only approve tasks that are pending
     });
 
@@ -418,7 +418,7 @@ export const approveTask = asyncHandler(
 
     // 4. Check if all assigned tasks for this member are now complete (for streak calculation)
     const allMemberTasks = await Task.find({
-      householdId: householdId,
+      householdId,
       assignedTo: memberProfile._id,
       status: { $in: ['Pending', 'PendingApproval'] }
     });

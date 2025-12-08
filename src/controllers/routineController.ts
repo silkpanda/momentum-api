@@ -31,7 +31,7 @@ const checkAndResetRoutine = async (routine: any): Promise<void> => {
 export const createRoutine = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { title, memberId, timeOfDay, items } = req.body;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         if (!title || !memberId || !timeOfDay) {
             throw new AppError('Title, member ID, and time of day are required.', 400);
@@ -72,7 +72,7 @@ export const createRoutine = asyncHandler(
  */
 export const getAllRoutines = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-        const householdId = req.householdId;
+        const {householdId} = req;
         const routines = await Routine.find({ householdId, isActive: true }).sort({ createdAt: -1 });
 
         // Check and reset routines if needed
@@ -96,7 +96,7 @@ export const getAllRoutines = asyncHandler(
 export const getMemberRoutines = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { memberId } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const routines = await Routine.find({
             householdId,
@@ -125,7 +125,7 @@ export const getMemberRoutines = asyncHandler(
 export const getRoutineById = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const routine = await Routine.findOne({ _id: id, householdId });
 
@@ -151,7 +151,7 @@ export const getRoutineById = asyncHandler(
 export const updateRoutine = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
         const { title, timeOfDay, items, isActive } = req.body;
 
         const routine = await Routine.findOne({ _id: id, householdId });
@@ -195,7 +195,7 @@ export const updateRoutine = asyncHandler(
 export const deleteRoutine = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const routine = await Routine.findOneAndDelete({ _id: id, householdId });
 
@@ -218,7 +218,7 @@ export const deleteRoutine = asyncHandler(
 export const toggleRoutineItem = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id, itemId } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const routine = await Routine.findOne({ _id: id, householdId });
 
@@ -276,7 +276,7 @@ export const toggleRoutineItem = asyncHandler(
 export const resetRoutine = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const routine = await Routine.findOne({ _id: id, householdId });
 

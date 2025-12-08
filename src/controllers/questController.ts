@@ -40,14 +40,14 @@ const calculateNextReset = (frequency: 'daily' | 'weekly' | 'monthly') => {
 export const createQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { title, description, pointsValue, questType, maxClaims, recurrence, dueDate } = req.body;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         if (!title || !pointsValue) {
             throw new AppError('Title and points value are required.', 400);
         }
 
         // Prepare recurrence object if provided
-        let recurrenceData = undefined;
+        let recurrenceData;
         if (recurrence && recurrence !== 'none') {
             recurrenceData = {
                 frequency: recurrence,
@@ -89,7 +89,7 @@ export const updateQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
         const { title, description, pointsValue, questType, maxClaims, recurrence, dueDate } = req.body;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const quest = await Quest.findOne({ _id: id, householdId });
 
@@ -140,7 +140,7 @@ export const updateQuest = asyncHandler(
  */
 export const getAllQuests = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         // Fetch all quests
         const quests = await Quest.find({ householdId }).sort({ createdAt: -1 });
@@ -173,7 +173,7 @@ export const getAllQuests = asyncHandler(
 export const deleteQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const quest = await Quest.findOneAndDelete({ _id: id, householdId });
 
@@ -197,7 +197,7 @@ export const claimQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
         const { memberId } = req.body;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         if (!memberId) {
             throw new AppError('Member ID is required to claim a quest.', 400);
@@ -235,7 +235,7 @@ export const completeQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
         const { memberId } = req.body;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         if (!memberId) {
             throw new AppError('Member ID is required to complete a quest.', 400);
@@ -273,7 +273,7 @@ export const approveQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
         const { memberId } = req.body;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const quest = await Quest.findOne({ _id: id, householdId });
         if (!quest) throw new AppError('Quest not found.', 404);
