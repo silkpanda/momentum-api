@@ -4,6 +4,7 @@ import {
     exchangeCodeForTokens,
     getCalendarEvents,
     listCalendars,
+    createCalendarEvent,
 } from '../controllers/googleCalendarController';
 
 const router = express.Router();
@@ -13,6 +14,9 @@ router.post('/connect', protect, exchangeCodeForTokens);
 
 // Get calendar events
 router.get('/events', protect, getCalendarEvents);
+
+// Create calendar event
+router.post('/events', protect, createCalendarEvent);
 
 // List user's calendars
 router.get('/list', protect, listCalendars);
