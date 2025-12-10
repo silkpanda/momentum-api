@@ -280,6 +280,12 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
     const householdId = req.householdId;
     const familyMember = await FamilyMember.findById(userId);
 
+    console.log('[Create Event] Request received:', {
+        userId,
+        householdId,
+        body: req.body,
+    });
+
     if (!familyMember) return next(new AppError('User not found', 404));
 
     const { title, startDate, endDate, allDay, location, notes, attendees } = req.body;
@@ -415,6 +421,12 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
         });
     } catch (error: any) {
         console.error('Google Calendar sync error:', error);
+        console.error('Error details:', {
+            message: error.message,
+            code: error.code,
+            errors: error.errors,
+            stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+        });
 
         // Event is saved in DB but Google sync failed
         // Return success but note the sync failure
