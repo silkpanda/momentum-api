@@ -164,13 +164,31 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         const calendarId = familyMember.googleCalendar?.selectedCalendarId || 'primary';
 
-        const response = await calendar.events.list({
+        // Default to start of today if no timeMin provided
+        let timeMin = req.query.timeMin;
+        if (!timeMin) {
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+            timeMin = startOfDay.toISOString();
+        }
+
+        const listParams: any = {
             calendarId,
-            timeMin: new Date().toISOString(),
+            timeMin,
             maxResults: 50,
             singleEvents: true,
             orderBy: 'startTime',
-        });
+        };
+
+        if (req.query.timeMax) {
+            listParams.timeMax = req.query.timeMax;
+        }
+
+        console.log(`[Google Calendar] Fetching events for ${calendarId} from ${timeMin}`);
+
+        const response = await calendar.events.list(listParams);
+
+        console.log(`[Google Calendar] Found ${response.data.items?.length || 0} events`);
 
         res.status(200).json({
             status: 'success',
@@ -206,6 +224,8 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         const calendarId = familyMember.googleCalendar?.selectedCalendarId || 'primary';
 
+        console.log(`[Google Calendar] Creating event in ${calendarId}: ${title}`);
+
         const event = {
             summary: title,
             location: location,
@@ -222,6 +242,8 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
             calendarId,
             requestBody: event,
         });
+
+        console.log(`[Google Calendar] Event created! ID: ${response.data.id}, Link: ${response.data.htmlLink}`);
 
         res.status(201).json({
             status: 'success',
