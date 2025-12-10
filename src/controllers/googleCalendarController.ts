@@ -219,7 +219,7 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         console.log('[Sync] Google Calendar unavailable, returning DB events');
 
         // Convert DB events to Google Calendar format
-        const formattedEvents = dbEvents.map(e => ({
+        const formattedEvents = dbEvents.map((e: any) => ({
             id: e.googleEventId || e._id.toString(),
             summary: e.title,
             description: e.description,
@@ -320,7 +320,7 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
             status: 'success',
             message: 'Event created locally. Google Calendar sync will retry.',
             data: {
-                id: event._id.toString(),
+                id: (event as any)._id.toString(),
                 summary: event.title,
                 start: event.allDay
                     ? { date: event.startDate.toISOString().split('T')[0] }
