@@ -295,8 +295,13 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
     }
 
     // Fetch household for family calendar and color info
+    console.log('[Create Event] Fetching household:', householdId);
     const household = await Household.findById(householdId);
-    if (!household) return next(new AppError('Household not found', 404));
+    if (!household) {
+        console.error('[Create Event] Household not found:', householdId);
+        return next(new AppError('Household not found', 404));
+    }
+    console.log('[Create Event] Household found:', household.householdName);
 
     // Determine calendar routing and color based on attendees
     let targetCalendarId: string;
@@ -315,12 +320,16 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
 
     } else if (attendees.length === 1) {
         // Single attendee → Their calendar with their color
+        console.log('[Calendar Routing] Looking up attendee:', attendees[0]);
         const attendeeMember = await FamilyMember.findById(attendees[0]);
+        console.log('[Calendar Routing] Attendee member found:', !!attendeeMember);
         const attendeeProfile = household.memberProfiles.find(
             p => p.familyMemberId.toString() === attendees[0].toString()
         );
+        console.log('[Calendar Routing] Attendee profile found:', !!attendeeProfile);
 
         if (!attendeeMember || !attendeeProfile) {
+            console.error('[Calendar Routing] Attendee not found - member:', !!attendeeMember, 'profile:', !!attendeeProfile);
             return next(new AppError('Attendee not found', 404));
         }
 
