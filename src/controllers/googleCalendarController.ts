@@ -281,39 +281,53 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
 
     if (!familyMember) return next(new AppError('User not found', 404));
 
-    const { title, startDate, endDate, allDay, location, notes } = req.body;
+    const { title, startDate, endDate, allDay, location, notes, attendees } = req.body;
 
     if (!title || !startDate || !endDate) {
         return next(new AppError('Missing required fields', 400));
     }
 
-    // Step 1: Save to DB first
+    // Determine the title for Google Calendar (with attendees if provided)
+    let googleCalendarTitle = title;
+    if (attendees && attendees.length > 0) {
+        // Fetch attendee names
+        const attendeeMembers = await FamilyMember.find({
+            _id: { $in: attendees }
+        }).select('firstName');
+
+        const attendeeNames = attendeeMembers.map(m => m.firstName).join(', ');
+        if (attendeeNames) {
+            googleCalendarTitle = `${title} (${attendeeNames})`;
+        }
+    }
+
+    // Step 1: Save to DB with CLEAN title (no attendee names)
     const event = await Event.create({
         householdId,
         createdBy: userId,
-        title,
+        title, // Clean title for app display
         description: notes,
         location,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         allDay: allDay || false,
-        attendees: [],
-        calendarType: 'personal',
+        attendees: attendees || [],
+        calendarType: attendees && attendees.length > 1 ? 'family' : 'personal',
     });
 
-    console.log(`[DB] Event created: ${event._id}`);
+    console.log(`[DB] Event created: ${event._id} (title: "${title}")`);
 
-    // Step 2: Sync to Google Calendar
+    // Step 2: Sync to Google Calendar with APPENDED title
     try {
         await ensureValidToken(familyMember);
 
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         const calendarId = familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
 
-        console.log(`[Google Calendar] Creating event in ${calendarId}: ${title}`);
+        console.log(`[Google Calendar] Creating event in ${calendarId}: "${googleCalendarTitle}"`);
 
         const googleEvent = {
-            summary: title,
+            summary: googleCalendarTitle, // Title WITH attendee names
             location: location,
             description: notes,
             start: allDay
