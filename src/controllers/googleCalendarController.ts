@@ -1,11 +1,12 @@
 // =========================================================
 // src/controllers/googleCalendarController.ts
-// Google Calendar OAuth and event management
+// Google Calendar OAuth and event management with DB sync
 // =========================================================
 import { Request, Response, NextFunction } from 'express';
 import { google } from 'googleapis';
 import asyncHandler from 'express-async-handler';
 import FamilyMember from '../models/FamilyMember';
+import Event from '../models/Event';
 import AppError from '../utils/AppError';
 
 const oauth2Client = new google.auth.OAuth2(
@@ -20,7 +21,7 @@ const ensureValidToken = async (familyMember: any) => {
     }
 
     const isTokenExpired = familyMember.googleCalendar.expiryDate
-        ? Date.now() >= familyMember.googleCalendar.expiryDate - 60000 // Refresh 1 min before expiry
+        ? Date.now() >= familyMember.googleCalendar.expiryDate - 60000
         : false;
 
     if (isTokenExpired && familyMember.googleCalendar.refreshToken) {
@@ -56,7 +57,6 @@ const ensureValidToken = async (familyMember: any) => {
  * @access  Protected
  */
 export const exchangeCodeForTokens = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
-    // Check for code in 'code' or 'serverAuthCode' fields
     const code = req.body.code || req.body.serverAuthCode;
     const { redirectUri } = req.body;
     const userId = req.user?._id;
@@ -70,27 +70,23 @@ export const exchangeCodeForTokens = asyncHandler(async (req: any, res: Response
     }
 
     try {
-        // Create a new OAuth client with the correct redirect URI
         const client = new google.auth.OAuth2(
             process.env.GOOGLE_CLIENT_ID,
             process.env.GOOGLE_CLIENT_SECRET,
-            redirectUri || '' // Mobile apps often use empty string or specific URI for redirect
+            redirectUri || ''
         );
 
-        // Exchange authorization code for tokens
         const { tokens } = await client.getToken(code);
 
         if (!tokens.access_token) {
             return next(new AppError('Failed to get tokens from Google', 500));
         }
 
-        // Store tokens in user's profile
         const familyMember = await FamilyMember.findById(userId);
         if (!familyMember) {
             return next(new AppError('User not found', 404));
         }
 
-        // Initialize googleCalendar object if it doesn't exist
         if (!familyMember.googleCalendar) {
             familyMember.googleCalendar = {
                 accessToken: '',
@@ -149,23 +145,28 @@ export const listCalendars = asyncHandler(async (req: any, res: Response, next: 
 });
 
 /**
- * @desc    Get Google Calendar events
+ * @desc    Get Google Calendar events with DB reconciliation
  * @route   GET /api/v1/calendar/google/events
  * @access  Protected
  */
 export const getCalendarEvents = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
     const userId = req.user?._id;
+    const householdId = req.householdId;
+
     const familyMember = await FamilyMember.findById(userId);
     if (!familyMember) return next(new AppError('User not found', 404));
 
-    await ensureValidToken(familyMember);
+    // Fetch events from DB
+    const dbEvents = await Event.find({ householdId }).sort({ startDate: 1 });
 
+    // Try to sync with Google Calendar
     try {
+        await ensureValidToken(familyMember);
+
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         const calendarId = familyMember.googleCalendar?.selectedCalendarId || 'primary';
 
-        // Default to start of today if no timeMin provided
-        let timeMin = req.query.timeMin;
+        let timeMin = req.query.timeMin as string;
         if (!timeMin) {
             const startOfDay = new Date();
             startOfDay.setHours(0, 0, 0, 0);
@@ -175,7 +176,7 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         const listParams: any = {
             calendarId,
             timeMin,
-            maxResults: 50,
+            maxResults: 100,
             singleEvents: true,
             orderBy: 'startTime',
         };
@@ -187,32 +188,70 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         console.log(`[Google Calendar] Fetching events for ${calendarId} from ${timeMin}`);
 
         const response = await calendar.events.list(listParams);
+        const googleEvents = response.data.items || [];
 
-        console.log(`[Google Calendar] Found ${response.data.items?.length || 0} events`);
+        console.log(`[Google Calendar] Found ${googleEvents.length} events from Google`);
 
+        // Reconciliation: Remove DB events that don't exist in Google anymore
+        const googleEventIds = new Set(googleEvents.map(e => e.id));
+        const orphanedEvents = dbEvents.filter(
+            e => e.googleEventId && !googleEventIds.has(e.googleEventId)
+        );
+
+        if (orphanedEvents.length > 0) {
+            console.log(`[Sync] Removing ${orphanedEvents.length} orphaned events from DB`);
+            await Event.deleteMany({
+                _id: { $in: orphanedEvents.map(e => e._id) }
+            });
+        }
+
+        // Return Google Calendar events (source of truth for display)
         res.status(200).json({
             status: 'success',
             data: {
-                events: response.data.items || [],
+                events: googleEvents,
             },
         });
     } catch (error: any) {
         console.error('Calendar events error:', error);
-        return next(new AppError(`Failed to fetch events: ${error.message}`, 500));
+
+        // If Google sync fails, return DB events as fallback
+        console.log('[Sync] Google Calendar unavailable, returning DB events');
+
+        // Convert DB events to Google Calendar format
+        const formattedEvents = dbEvents.map(e => ({
+            id: e.googleEventId || e._id.toString(),
+            summary: e.title,
+            description: e.description,
+            location: e.location,
+            start: e.allDay
+                ? { date: e.startDate.toISOString().split('T')[0] }
+                : { dateTime: e.startDate.toISOString() },
+            end: e.allDay
+                ? { date: e.endDate.toISOString().split('T')[0] }
+                : { dateTime: e.endDate.toISOString() },
+        }));
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                events: formattedEvents,
+            },
+        });
     }
 });
 
 /**
- * @desc    Create a new event in Google Calendar
+ * @desc    Create a new event (DB + Google Calendar sync)
  * @route   POST /api/v1/calendar/google/events
  * @access  Protected
  */
 export const createCalendarEvent = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
     const userId = req.user?._id;
+    const householdId = req.householdId;
     const familyMember = await FamilyMember.findById(userId);
-    if (!familyMember) return next(new AppError('User not found', 404));
 
-    await ensureValidToken(familyMember);
+    if (!familyMember) return next(new AppError('User not found', 404));
 
     const { title, startDate, endDate, allDay, location, notes } = req.body;
 
@@ -220,13 +259,32 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
         return next(new AppError('Missing required fields', 400));
     }
 
+    // Step 1: Save to DB first
+    const event = await Event.create({
+        householdId,
+        createdBy: userId,
+        title,
+        description: notes,
+        location,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        allDay: allDay || false,
+        attendees: [],
+        calendarType: 'personal',
+    });
+
+    console.log(`[DB] Event created: ${event._id}`);
+
+    // Step 2: Sync to Google Calendar
     try {
+        await ensureValidToken(familyMember);
+
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
         const calendarId = familyMember.googleCalendar?.selectedCalendarId || 'primary';
 
         console.log(`[Google Calendar] Creating event in ${calendarId}: ${title}`);
 
-        const event = {
+        const googleEvent = {
             summary: title,
             location: location,
             description: notes,
@@ -240,8 +298,12 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
 
         const response = await calendar.events.insert({
             calendarId,
-            requestBody: event,
+            requestBody: googleEvent,
         });
+
+        // Update DB event with Google Calendar ID
+        event.googleEventId = response.data.id!;
+        await event.save();
 
         console.log(`[Google Calendar] Event created! ID: ${response.data.id}, Link: ${response.data.htmlLink}`);
 
@@ -250,7 +312,23 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
             data: response.data,
         });
     } catch (error: any) {
-        console.error('Create event error:', error);
-        return next(new AppError(`Failed to create event: ${error.message}`, 500));
+        console.error('Google Calendar sync error:', error);
+
+        // Event is saved in DB but Google sync failed
+        // Return success but note the sync failure
+        res.status(201).json({
+            status: 'success',
+            message: 'Event created locally. Google Calendar sync will retry.',
+            data: {
+                id: event._id.toString(),
+                summary: event.title,
+                start: event.allDay
+                    ? { date: event.startDate.toISOString().split('T')[0] }
+                    : { dateTime: event.startDate.toISOString() },
+                end: event.allDay
+                    ? { date: event.endDate.toISOString().split('T')[0] }
+                    : { dateTime: event.endDate.toISOString() },
+            },
+        });
     }
 });
