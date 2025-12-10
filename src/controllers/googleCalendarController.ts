@@ -164,7 +164,7 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         await ensureValidToken(familyMember);
 
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-        const calendarId = familyMember.googleCalendar?.selectedCalendarId || 'primary';
+        const calendarId = familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
 
         let timeMin = req.query.timeMin as string;
         if (!timeMin) {
@@ -201,15 +201,43 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         if (orphanedEvents.length > 0) {
             console.log(`[Sync] Removing ${orphanedEvents.length} orphaned events from DB`);
             await Event.deleteMany({
-                _id: { $in: orphanedEvents.map(e => e._id) }
+                _id: { $in: orphanedEvents.map((e: any) => e._id) }
             });
         }
 
-        // Return Google Calendar events (source of truth for display)
+        // Merge DB events with Google events
+        // Priority: Google Calendar events (if synced), then DB-only events
+        const googleEventIdSet = new Set(googleEvents.map(e => e.id));
+
+        // Get DB events that haven't synced to Google yet
+        const unsyncedDbEvents = dbEvents.filter(
+            (e: any) => !e.googleEventId || !googleEventIdSet.has(e.googleEventId)
+        );
+
+        // Convert unsynced DB events to Google Calendar format
+        const formattedUnsyncedEvents = unsyncedDbEvents.map((e: any) => ({
+            id: e._id.toString(),
+            summary: e.title,
+            description: e.description,
+            location: e.location,
+            start: e.allDay
+                ? { date: e.startDate.toISOString().split('T')[0] }
+                : { dateTime: e.startDate.toISOString() },
+            end: e.allDay
+                ? { date: e.endDate.toISOString().split('T')[0] }
+                : { dateTime: e.endDate.toISOString() },
+        }));
+
+        // Merge: Google events + unsynced DB events
+        const allEvents = [...googleEvents, ...formattedUnsyncedEvents];
+
+        console.log(`[Sync] Returning ${googleEvents.length} Google events + ${formattedUnsyncedEvents.length} DB-only events`);
+
+        // Return merged events
         res.status(200).json({
             status: 'success',
             data: {
-                events: googleEvents,
+                events: allEvents,
             },
         });
     } catch (error: any) {
@@ -280,7 +308,7 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
         await ensureValidToken(familyMember);
 
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-        const calendarId = familyMember.googleCalendar?.selectedCalendarId || 'primary';
+        const calendarId = familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
 
         console.log(`[Google Calendar] Creating event in ${calendarId}: ${title}`);
 
