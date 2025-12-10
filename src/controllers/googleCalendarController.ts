@@ -330,6 +330,11 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
 
         if (!attendeeMember || !attendeeProfile) {
             console.error('[Calendar Routing] Attendee not found - member:', !!attendeeMember, 'profile:', !!attendeeProfile);
+            console.error('[Calendar Routing] Available household members:', household.memberProfiles.map(p => ({
+                id: p.familyMemberId.toString(),
+                displayName: p.displayName,
+                role: p.role
+            })));
             return next(new AppError('Attendee not found', 404));
         }
 
