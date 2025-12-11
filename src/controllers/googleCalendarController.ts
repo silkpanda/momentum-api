@@ -379,7 +379,8 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
 
         targetCalendarId = attendeeMember.googleCalendar?.selectedCalendarId || familyMember.email;
         eventColor = attendeeProfile.profileColor;
-        googleCalendarTitle = `${title} (${attendeeProfile.displayName})`;
+        // googleCalendarTitle = `${title} (${attendeeProfile.displayName})`; // Removed per user request
+        googleCalendarTitle = title;
 
         console.log(`[Calendar Routing] Single attendee (${attendeeProfile.displayName}) → Their calendar (${targetCalendarId}) with color ${eventColor}`);
 
