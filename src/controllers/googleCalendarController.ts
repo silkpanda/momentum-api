@@ -174,10 +174,18 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
             timeMin = startOfDay.toISOString();
         }
 
+        // FIX: Only fetch DB events within the requested window to avoid analyzing past events as orphans
+        console.log(`[Sync] Fetching DB events for household ${householdId} after ${timeMin}`);
+        const scopedDbEvents = await Event.find({
+            householdId,
+            startDate: { $gte: new Date(timeMin) }
+        }).sort({ startDate: 1 });
+        console.log(`[Sync] Found ${scopedDbEvents.length} events in DB`);
+
         const listParams: any = {
             calendarId,
             timeMin,
-            maxResults: 100,
+            maxResults: 200,
             singleEvents: true,
             orderBy: 'startTime',
         };
@@ -191,29 +199,26 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         const response = await calendar.events.list(listParams);
         const googleEvents = response.data.items || [];
 
-        console.log(`[Google Calendar] Found ${googleEvents.length} events from Google`);
+        console.log(`[Google Calendar] Found ${googleEvents.length} events from Google API`);
 
-        // Reconciliation: Remove DB events that don't exist in Google anymore
-        const googleEventIds = new Set(googleEvents.map(e => e.id));
-        const orphanedEvents = dbEvents.filter(
-            e => e.googleEventId && !googleEventIds.has(e.googleEventId)
-        );
+        // ... (Reconciliation logic is commented out above) ...
 
-        if (orphanedEvents.length > 0) {
-            console.log(`[Sync] Removing ${orphanedEvents.length} orphaned events from DB`);
-            await Event.deleteMany({
-                _id: { $in: orphanedEvents.map((e: any) => e._id) }
-            });
-        }
-
-        // Merge DB events with Google events
-        // Priority: Google Calendar events (if synced), then DB-only events
         const googleEventIdSet = new Set(googleEvents.map(e => e.id));
 
-        // Get DB events that haven't synced to Google yet
-        const unsyncedDbEvents = dbEvents.filter(
-            (e: any) => !e.googleEventId || !googleEventIdSet.has(e.googleEventId)
+        // Get DB events that haven't synced to Google yet OR were not returned by Google
+        const unsyncedDbEvents = scopedDbEvents.filter(
+            (e: any) => {
+                const isMissingFromGoogle = !e.googleEventId || !googleEventIdSet.has(e.googleEventId);
+                if (isMissingFromGoogle) {
+                    // console.log(`[Sync] Include DB Event: ${e.title} (Reason: ${!e.googleEventId ? 'No Google ID' : 'Not in Google List'})`);
+                }
+                return isMissingFromGoogle;
+            }
         );
+        console.log(`[Sync] Merging ${unsyncedDbEvents.length} DB-only/Missing events`);
+
+        // ... (conversion logic) ...
+
 
         // Convert unsynced DB events to Google Calendar format
         const formattedUnsyncedEvents = unsyncedDbEvents.map((e: any) => ({
