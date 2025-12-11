@@ -341,6 +341,9 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
         return next(new AppError('Household not found', 404));
     }
     console.log('[Create Event] Household found:', household.householdName);
+    console.log('[Create Event] Family Calendar ID:', household.familyCalendarId);
+    console.log('[Create Event] Family Color:', household.familyColor);
+    console.log('[Create Event] Parent Calendar ID:', familyMember.googleCalendar?.selectedCalendarId);
 
     // Determine calendar routing and color based on attendees
     let targetCalendarId: string;
