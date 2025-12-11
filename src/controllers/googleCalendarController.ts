@@ -220,24 +220,56 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         // ... (conversion logic) ...
 
 
+        // Merge: Google events + unsynced DB events
+        const REVERSE_COLOR_MAP: { [key: string]: string } = {
+            '1': '#6366F1',  // Indigo/Lavender
+            '2': '#3B82F6',  // Sage/Green -> Mapping to Blue for now or custom
+            '3': '#8B5CF6',  // Grape/Violet
+            '4': '#EC4899',  // Flamingo/Pink
+            '5': '#F59E0B',  // Banana/Yellow-Amber
+            '6': '#F97316',  // Tangerine/Orange
+            '7': '#06B6D4',  // Peacock/Cyan
+            '8': '#6B7280',  // Graphite/Gray
+            '9': '#3B82F6',  // Blueberry/Blue (Default)
+            '10': '#10B981', // Basil/Green
+            '11': '#EF4444', // Tomato/Red
+        };
+
+        const mapGoogleEvent = (e: any) => ({
+            id: e.id,
+            title: e.summary || 'No Title',
+            summary: e.summary,
+            description: e.description,
+            location: e.location,
+            color: REVERSE_COLOR_MAP[e.colorId] || '#3B82F6', // Default to Blue
+            start: e.start,
+            end: e.end,
+            allDay: !e.start.dateTime,
+        });
+
+        const mappedGoogleEvents = googleEvents.map(mapGoogleEvent);
+
         // Convert unsynced DB events to Google Calendar format
         const formattedUnsyncedEvents = unsyncedDbEvents.map((e: any) => ({
             id: e._id.toString(),
             summary: e.title,
+            title: e.title,
             description: e.description,
             location: e.location,
+            color: e.color || '#3B82F6', // Use saved DB color!
             start: e.allDay
                 ? { date: e.startDate.toISOString().split('T')[0] }
                 : { dateTime: e.startDate.toISOString() },
             end: e.allDay
                 ? { date: e.endDate.toISOString().split('T')[0] }
                 : { dateTime: e.endDate.toISOString() },
+            allDay: e.allDay
         }));
 
         // Merge: Google events + unsynced DB events
-        const allEvents = [...googleEvents, ...formattedUnsyncedEvents];
+        const allEvents = [...mappedGoogleEvents, ...formattedUnsyncedEvents];
 
-        console.log(`[Sync] Returning ${googleEvents.length} Google events + ${formattedUnsyncedEvents.length} DB-only events`);
+        console.log(`[Sync] Returning ${mappedGoogleEvents.length} Google events + ${formattedUnsyncedEvents.length} DB-only events`);
 
         // Return merged events
         res.status(200).json({
@@ -258,12 +290,14 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
             summary: e.title,
             description: e.description,
             location: e.location,
+            color: e.color || '#3B82F6', // Use saved DB color!
             start: e.allDay
                 ? { date: e.startDate.toISOString().split('T')[0] }
                 : { dateTime: e.startDate.toISOString() },
             end: e.allDay
                 ? { date: e.endDate.toISOString().split('T')[0] }
                 : { dateTime: e.endDate.toISOString() },
+            allDay: e.allDay
         }));
 
         res.status(200).json({
@@ -379,7 +413,7 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
         allDay: allDay || false,
         attendees: attendees || [],
         calendarType,
-        // Store color for app display (we'll need to add this field to the Event model)
+        color: eventColor, // <--- CRITICAL FIX: Save the determined color
     });
 
     console.log(`[DB] Event created: ${event._id} (title: "${title}", color: ${eventColor})`);

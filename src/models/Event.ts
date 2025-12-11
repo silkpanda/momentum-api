@@ -16,6 +16,7 @@ export interface IEvent extends Document {
     reminderMinutes?: number;
     googleEventId?: string; // ID in Google Calendar
     calendarType: 'personal' | 'family'; // Which calendar it's synced to
+    color?: string; // Hex color for display
     createdBy: Types.ObjectId; // FamilyMember ID
     createdAt?: Date;
     updatedAt?: Date;
@@ -80,6 +81,10 @@ const EventSchema = new Schema<IEvent>(
             type: String,
             enum: ['personal', 'family'],
             required: [true, 'Calendar type is required'],
+        },
+        color: {
+            type: String, // Hex color code
+            default: '#3B82F6', // Default blue
         },
         createdBy: {
             type: Schema.Types.ObjectId,
