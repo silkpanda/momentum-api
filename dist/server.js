@@ -37,11 +37,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.httpServer = exports.app = exports.io = void 0;
+const dotenv = __importStar(require("dotenv"));
 const express_1 = __importDefault(require("express"));
 const mongoose_1 = __importDefault(require("mongoose"));
 const mongodb_1 = require("mongodb");
 const cors_1 = __importDefault(require("cors"));
-const dotenv = __importStar(require("dotenv"));
 const http_1 = require("http");
 const socket_io_1 = require("socket.io");
 // Import routers
@@ -57,10 +57,14 @@ const pin_1 = __importDefault(require("./routes/pin"));
 const householdLinkRoutes_1 = __importDefault(require("./routes/householdLinkRoutes"));
 const notificationRoutes_1 = __importDefault(require("./routes/notificationRoutes"));
 const googleCalendarRoutes_1 = __importDefault(require("./routes/googleCalendarRoutes"));
+const calendarManagementRoutes_1 = __importDefault(require("./routes/calendarManagementRoutes"));
+const dashboardRoutes_1 = __importDefault(require("./routes/dashboardRoutes"));
+const familyRoutes_1 = __importDefault(require("./routes/familyRoutes"));
+const eventRoutes_1 = __importDefault(require("./routes/eventRoutes"));
 // Import error handling
 const AppError_1 = __importDefault(require("./utils/AppError"));
 const errorHandler_1 = require("./utils/errorHandler");
-// 1. Load Environment Variables
+// 1. Load Environment Variables FIRST
 dotenv.config();
 // 2. Validate Required Environment Variables
 const requiredEnvVars = [
@@ -196,6 +200,14 @@ app.use('/api/v1/wishlist', wishlistRoutes_1.default);
 app.use('/api/v1/notifications', notificationRoutes_1.default);
 // Register Google Calendar routes
 app.use('/api/v1/calendar/google', googleCalendarRoutes_1.default);
+// Register Calendar Management routes (list, create, verify)
+app.use('/api/v1/calendar', calendarManagementRoutes_1.default);
+// Register Dashboard routes
+app.use('/api/v1/dashboard', dashboardRoutes_1.default);
+// Register Family routes
+app.use('/api/v1/family', familyRoutes_1.default);
+// Register Event routes
+app.use('/api/v1/events', eventRoutes_1.default);
 // Basic Health Check Route
 app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'API is running', environment: process.env.NODE_ENV });

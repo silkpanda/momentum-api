@@ -18,7 +18,7 @@ const handleResponse = (res, status, message, data) => {
 /** Get all StoreItems for the authenticated user's household */
 const getAllStoreItems = async (req, res) => {
     try {
-        const householdId = req.householdId;
+        const { householdId } = req;
         if (!householdId) {
             handleResponse(res, 400, 'Household context is missing from request.');
             return;
@@ -43,7 +43,7 @@ const createStoreItem = async (req, res) => {
             handleResponse(res, 400, 'Missing mandatory fields: itemName and cost.');
             return;
         }
-        const householdId = req.householdId;
+        const { householdId } = req;
         if (!householdId) {
             handleResponse(res, 400, 'Household context is missing from request.');
             return;
@@ -70,7 +70,7 @@ exports.createStoreItem = createStoreItem;
 const getStoreItem = async (req, res) => {
     try {
         const itemId = req.params.id;
-        const householdId = req.householdId;
+        const { householdId } = req;
         const item = await StoreItem_1.default.findOne({ _id: itemId, householdRefId: householdId });
         if (!item) {
             handleResponse(res, 404, 'Store item not found or does not belong to your household.');
@@ -92,7 +92,7 @@ exports.getStoreItem = getStoreItem;
 const updateStoreItem = async (req, res) => {
     try {
         const itemId = req.params.id;
-        const householdId = req.householdId;
+        const { householdId } = req;
         const updates = { ...req.body };
         delete updates.householdRefId; // never allow changing household linkage
         const updatedItem = await StoreItem_1.default.findOneAndUpdate({ _id: itemId, householdRefId: householdId }, updates, { new: true, runValidators: true });
@@ -118,7 +118,7 @@ exports.updateStoreItem = updateStoreItem;
 const deleteStoreItem = async (req, res) => {
     try {
         const itemId = req.params.id;
-        const householdId = req.householdId;
+        const { householdId } = req;
         const deletedItem = await StoreItem_1.default.findOneAndDelete({ _id: itemId, householdRefId: householdId });
         if (!deletedItem) {
             handleResponse(res, 404, 'Store item not found or does not belong to your household.');

@@ -6,52 +6,44 @@ const mongoose_1 = require("mongoose");
 const HouseholdMemberProfileSchema = new mongoose_1.Schema({
     familyMemberId: {
         type: mongoose_1.Schema.Types.ObjectId,
-        ref: 'FamilyMember', // Reference to the global user
+        ref: 'FamilyMember',
         required: true,
     },
     displayName: {
         type: String,
-        required: [true, 'Display name is required'],
-        trim: true,
+        required: true,
     },
     profileColor: {
         type: String,
-        required: [true, 'Profile color is required'],
+        required: true,
     },
     role: {
         type: String,
         enum: ['Parent', 'Child'],
-        required: [true, 'Member role is required'],
+        required: true,
     },
     pointsTotal: {
         type: Number,
         default: 0,
-        min: 0,
     },
     focusedTaskId: {
         type: mongoose_1.Schema.Types.ObjectId,
         ref: 'Task',
-        default: null,
     },
-    // Streak System fields
     currentStreak: {
         type: Number,
         default: 0,
-        min: 0,
     },
     longestStreak: {
         type: Number,
         default: 0,
-        min: 0,
     },
     lastCompletionDate: {
         type: String,
-        default: null,
     },
     streakMultiplier: {
         type: Number,
         default: 1.0,
-        min: 1.0,
     },
     isLinkedChild: {
         type: Boolean,
@@ -77,6 +69,15 @@ const HouseholdSchema = new mongoose_1.Schema({
         type: String,
         unique: true,
         sparse: true, // Allows null/undefined to not conflict
+    },
+    // New Calendar Integration v4
+    familyColor: {
+        type: String,
+        default: '#8B5CF6', // Default to Violet/Purple if not set
+    },
+    familyCalendarId: {
+        type: String,
+        default: null,
     },
 }, {
     timestamps: true,

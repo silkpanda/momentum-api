@@ -6,9 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.protect = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const express_async_handler_1 = __importDefault(require("express-async-handler")); // Required for protect function
+const mongoose_1 = require("mongoose");
 const FamilyMember_1 = __importDefault(require("../models/FamilyMember"));
 const AppError_1 = __importDefault(require("../utils/AppError"));
-const mongoose_1 = require("mongoose");
 const constants_1 = require("../config/constants"); // Import JWT_SECRET
 // Middleware function to protect routes
 exports.protect = (0, express_async_handler_1.default)(async (req, res, next) => {

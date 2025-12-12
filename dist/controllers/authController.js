@@ -5,11 +5,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getMe = exports.restrictTo = exports.login = exports.signup = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const FamilyMember_1 = __importDefault(require("../models/FamilyMember"));
 const Household_1 = __importDefault(require("../models/Household"));
 const constants_1 = require("../config/constants");
 const AppError_1 = __importDefault(require("../utils/AppError"));
-const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const signToken = (id, householdId) => {
     const payload = { id, householdId };
     const options = {
@@ -19,24 +19,29 @@ const signToken = (id, householdId) => {
 };
 exports.signup = (0, express_async_handler_1.default)(async (req, res, next) => {
     const { firstName, lastName, email, password } = req.body;
-    const { householdName, userDisplayName, userProfileColor, inviteCode } = req.body;
-    if (!firstName || !lastName || !email || !password || !userDisplayName || !userProfileColor) {
-        return next(new AppError_1.default('Missing mandatory fields (firstName, lastName, email, password, userDisplayName, userProfileColor).', 400));
+    // These are now optional
+    let { householdName, userDisplayName, userProfileColor, inviteCode } = req.body;
+    if (!firstName || !lastName || !email || !password) {
+        return next(new AppError_1.default('Missing mandatory fields (firstName, lastName, email, password).', 400));
     }
-    if (!inviteCode && !householdName) {
-        return next(new AppError_1.default('householdName is required when creating a new household.', 400));
-    }
+    // Set defaults for optional fields
+    if (!userDisplayName)
+        userDisplayName = firstName;
+    if (!userProfileColor)
+        userProfileColor = '#6366f1'; // Default Indigo
     try {
         const newParent = await FamilyMember_1.default.create({
             firstName,
             lastName,
             email,
             password,
+            onboardingCompleted: false, // Explicitly set to false
         });
         const parentId = newParent._id;
         let householdId;
         let household;
         if (inviteCode) {
+            // Joining existing household via code
             household = await Household_1.default.findOne({ inviteCode: inviteCode.toUpperCase() });
             if (!household) {
                 await FamilyMember_1.default.findByIdAndDelete(parentId);
@@ -58,7 +63,8 @@ exports.signup = (0, express_async_handler_1.default)(async (req, res, next) => 
             await household.save();
             householdId = household._id;
         }
-        else {
+        else if (householdName) {
+            // Creating a specific new household (e.g. from full form if we kept it)
             const creatorProfile = {
                 familyMemberId: parentId,
                 displayName: userDisplayName,
@@ -68,6 +74,21 @@ exports.signup = (0, express_async_handler_1.default)(async (req, res, next) => 
             };
             household = await Household_1.default.create({
                 householdName,
+                memberProfiles: [creatorProfile],
+            });
+            householdId = household._id;
+        }
+        else {
+            // Placeholder Household Logic (Minimal Signup)
+            const creatorProfile = {
+                familyMemberId: parentId,
+                displayName: userDisplayName,
+                profileColor: userProfileColor,
+                role: 'Parent',
+                pointsTotal: 0,
+            };
+            household = await Household_1.default.create({
+                householdName: `${firstName}'s Household`, // Placeholder name
                 memberProfiles: [creatorProfile],
             });
             householdId = household._id;
@@ -82,7 +103,8 @@ exports.signup = (0, express_async_handler_1.default)(async (req, res, next) => 
             token,
             data: {
                 parent: userWithRole,
-                household: household,
+                household,
+                needsOnboarding: true, // Signal to frontend to redirect
             },
         });
     }
@@ -126,22 +148,20 @@ exports.login = (0, express_async_handler_1.default)(async (req, res, next) => {
         },
     });
 });
-const restrictTo = (...roles) => {
-    return (0, express_async_handler_1.default)(async (req, res, next) => {
-        if (!req.user || !req.householdId) {
-            return next(new AppError_1.default('Role check failed: Missing user or household context from token.', 401));
-        }
-        const currentHousehold = await Household_1.default.findById(req.householdId);
-        if (!currentHousehold) {
-            return next(new AppError_1.default('Role check failed: The household associated with your token no longer exists.', 401));
-        }
-        const userHouseholdProfile = currentHousehold.memberProfiles.find((member) => member.familyMemberId.equals(req.user._id));
-        if (!userHouseholdProfile || !roles.includes(userHouseholdProfile.role)) {
-            return next(new AppError_1.default('You do not have permission to perform this action in this household.', 403));
-        }
-        next();
-    });
-};
+const restrictTo = (...roles) => (0, express_async_handler_1.default)(async (req, res, next) => {
+    if (!req.user || !req.householdId) {
+        return next(new AppError_1.default('Role check failed: Missing user or household context from token.', 401));
+    }
+    const currentHousehold = await Household_1.default.findById(req.householdId);
+    if (!currentHousehold) {
+        return next(new AppError_1.default('Role check failed: The household associated with your token no longer exists.', 401));
+    }
+    const userHouseholdProfile = currentHousehold.memberProfiles.find((member) => member.familyMemberId.equals(req.user._id));
+    if (!userHouseholdProfile || !roles.includes(userHouseholdProfile.role)) {
+        return next(new AppError_1.default('You do not have permission to perform this action in this household.', 403));
+    }
+    next();
+});
 exports.restrictTo = restrictTo;
 exports.getMe = (0, express_async_handler_1.default)(async (req, res, next) => {
     if (!req.user || !req.householdId) {
@@ -151,7 +171,7 @@ exports.getMe = (0, express_async_handler_1.default)(async (req, res, next) => {
     if (!household) {
         return next(new AppError_1.default('Household not found.', 404));
     }
-    const memberProfile = household.memberProfiles.find((member) => member.familyMemberId.toString() === req.user._id.toString());
+    const memberProfile = household.memberProfiles.find((member) => member.familyMemberId && member.familyMemberId.toString() === req.user._id.toString());
     const userWithRole = {
         ...req.user.toObject(),
         role: memberProfile?.role || 'Child',

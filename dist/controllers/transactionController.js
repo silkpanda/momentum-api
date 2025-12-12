@@ -62,7 +62,7 @@ const purchaseStoreItem = async (req, res) => {
         // FIX: The route param in storeItemRoutes.ts is ':id', not ':itemId'
         const itemId = req.params.id;
         const { memberId } = req.body; // The member who is purchasing the item
-        const householdId = req.householdId;
+        const { householdId } = req;
         if (!householdId || !memberId) {
             handleResponse(res, 400, 'Missing household context or member ID.', {});
             return;
@@ -119,7 +119,7 @@ const purchaseStoreItem = async (req, res) => {
         io.emit('member_points_updated', {
             memberId: updatedMemberProfile?._id,
             pointsTotal: newPointsTotal,
-            householdId: householdId,
+            householdId,
         });
         res.status(200).json({
             status: 'success',
