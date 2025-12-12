@@ -57,7 +57,9 @@ export const syncGoogleEventsToDb = async (
                 allDay,
                 householdId,
                 color: eventColor,
+                googleCalendarId: ge._sourceCalendarId, // Save source calendar ID
                 source: 'google',
+
                 status: 'active',
                 lastSyncedAt: new Date()
             };
@@ -87,30 +89,44 @@ export const syncGoogleEventsToDb = async (
             }
         }
 
-        // 2. Pruning (Delete Generic "Ghost" Events)
+        // 2. Pruning (Scoped to successfully synced calendars)
+        // Find events that belong to the calendars we just synced, but were NOT found in the sync result.
+
+        // Helper to extract unique calendar IDs processed
+        const syncedCalendarIds = Array.from(new Set(googleEvents.map(e => e._sourceCalendarId).filter(Boolean)));
+
+        if (syncedCalendarIds.length === 0) {
+            console.log('[SyncEngine] No calendars synced, skipping pruning to be safe.');
+            return;
+        }
+
         const pruningFilter: any = {
             householdId,
             googleEventId: { $ne: null, $exists: true },
-            startDate: { $gte: new Date(timeMin) }
+            startDate: { $gte: new Date(timeMin) },
+            // CRITICAL: Only prune events that belong to the calendars we actually checked
+            googleCalendarId: { $in: syncedCalendarIds }
         };
+
         if (timeMax) {
             pruningFilter.startDate.$lte = new Date(timeMax);
         }
 
-        const ghostEvents = await Event.find(pruningFilter).select('googleEventId title _sourceCalendarId');
+        const ghostEvents = await Event.find(pruningFilter).select('googleEventId title googleCalendarId');
         const eventsToDelete = ghostEvents.filter(e => !googleEventIdsSeen.has(e.googleEventId!));
 
         if (eventsToDelete.length > 0) {
-            console.log(`[SyncEngine] Found ${eventsToDelete.length} ghost events to prune:`);
+            console.log(`[SyncEngine] Found ${eventsToDelete.length} ghost events to prune (scoped to ${syncedCalendarIds.length} calendars):`);
             eventsToDelete.forEach(e => {
-                console.log(`  - "${e.title}" (googleEventId: ${e.googleEventId})`);
+                console.log(`  - "${e.title}" (ID: ${e.googleEventId})`);
             });
             const idsToDelete = eventsToDelete.map(e => e._id);
             await Event.deleteMany({ _id: { $in: idsToDelete } });
             console.log(`[SyncEngine] ✅ Pruned ${eventsToDelete.length} ghost events.`);
         } else {
-            console.log(`[SyncEngine] No ghost events found - all events in sync.`);
+            console.log(`[SyncEngine] No ghost events found for synced calendars (${syncedCalendarIds.join(', ')}).`);
         }
+
 
     } catch (err) {
         console.error('[SyncEngine] Critical Failure:', err);

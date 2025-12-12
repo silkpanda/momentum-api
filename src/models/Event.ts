@@ -15,6 +15,7 @@ export interface IEvent extends Document {
     recurrenceType?: 'daily' | 'weekly' | 'monthly';
     reminderMinutes?: number;
     googleEventId?: string; // ID in Google Calendar
+    googleCalendarId?: string; // The specific calendar ID this event belongs to
     calendarType: 'personal' | 'family'; // Which calendar it's synced to
     color?: string; // Hex color for display
     createdBy: Types.ObjectId; // FamilyMember ID
@@ -76,6 +77,10 @@ const EventSchema = new Schema<IEvent>(
         },
         googleEventId: {
             type: String,
+        },
+        googleCalendarId: { // The specific calendar ID this event belongs to
+            type: String,
+            index: true,
         },
         calendarType: {
             type: String,

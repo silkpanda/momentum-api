@@ -95,7 +95,9 @@ export const createEvent = async (userId: string, householdId: string, eventData
         attendees: attendees ? attendees.map(id => new Types.ObjectId(id)) : [],
         calendarType,
         color: eventColor,
+        googleCalendarId: targetCalendarId, // Save the target calendar ID
     });
+
 
     // Google Sync
     let googleResponse: any = null;
@@ -204,7 +206,9 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
     if (attendees !== undefined) event.attendees = attendees.map(id => new Types.ObjectId(id));
     event.calendarType = calendarType;
     event.color = eventColor;
+    event.googleCalendarId = targetCalendarId; // Update target calendar ID
     await event.save();
+
 
     // Google Sync
     let googleResponse: any = null;
