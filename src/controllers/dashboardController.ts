@@ -4,6 +4,7 @@ import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import Household from '../models/Household';
 import Task from '../models/Task';
 import StoreItem from '../models/StoreItem';
+import Event from '../models/Event';
 import AppError from '../utils/AppError';
 
 export const getDashboardData = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -15,11 +16,15 @@ export const getDashboardData = async (req: AuthenticatedRequest, res: Response,
         const userId = req.user.id;
         const householdId = req.householdId;
 
-        // Fetch data in parallel
-        const [household, tasks, storeItems] = await Promise.all([
+        // Fetch data in parallel (including calendar events)
+        const [household, tasks, storeItems, events] = await Promise.all([
             Household.findById(householdId).populate('memberProfiles.familyMemberId'),
             Task.find({ householdId }).populate('assignedTo.memberId').populate('createdBy'),
-            StoreItem.find({ householdId })
+            StoreItem.find({ householdId }),
+            Event.find({
+                householdId,
+                startDate: { $gte: new Date() } // Only future/current events
+            }).sort({ startDate: 1 }).limit(100) // Limit to prevent huge payloads
         ]);
 
         if (!household) {
@@ -43,27 +48,52 @@ export const getDashboardData = async (req: AuthenticatedRequest, res: Response,
             })) || []
         };
 
-        // Populate task assignments logic is handled by Mongoose populate usually,
-        // but BFF 'populateTaskAssignments' might have done specific formatting.
-        // For now, returning standard Mongoose populated tasks.
-        // If frontend breaks, we check populateTaskAssignments logic.
+        // Transform events to match calendar format with color normalization
+        const transformedEvents = events.map((e: any) => {
+            // Determine the correct color based on calendar type
+            let eventColor = e.color || '#3B82F6'; // Default fallback
 
-        // Re-map tasks to include flattened assignee details if needed?
-        // BFF logic: 'populateTaskAssignments(tasksData.data.tasks, memberProfiles)'
-        // The mobile app likely expects 'assignedTo' to contain full member details in the Dashboard view.
+            if (e.calendarType === 'family') {
+                // Family events use household family color
+                eventColor = household.familyColor || '#8B5CF6';
+            } else if (e.calendarType === 'personal' && e.attendees && e.attendees.length > 0) {
+                // Personal events use the attendee's profile color
+                const attendeeId = e.attendees[0]; // First attendee
+                const attendeeProfile = household.memberProfiles?.find(
+                    (p: any) => p.familyMemberId?._id?.toString() === attendeeId.toString() ||
+                        p.familyMemberId?.toString() === attendeeId.toString()
+                );
+                if (attendeeProfile?.profileColor) {
+                    eventColor = attendeeProfile.profileColor;
+                }
+            }
 
-        // Mongoose .populate('assignedTo.memberId') populates the *User* (FamilyMember), 
-        // but the 'memberId' in 'assignedTo' usually points to 'memberProfile._id' in some schemas 
-        // OR 'FamilyMember._id'. 
-        // In Momentum, 'assignedTo.memberId' usually refers to the Profile ID (Access Card).
-        // Let's assume Mongoose tasks are sufficient for now.
+            return {
+                id: e._id.toString(),
+                title: e.title,
+                summary: e.title,
+                description: e.description,
+                location: e.location,
+                color: eventColor, // Use normalized color
+                start: e.allDay
+                    ? { date: e.startDate.toISOString().split('T')[0] }
+                    : { dateTime: e.startDate.toISOString() },
+                end: e.allDay
+                    ? { date: e.endDate.toISOString().split('T')[0] }
+                    : { dateTime: e.endDate.toISOString() },
+                allDay: e.allDay,
+                startDate: e.startDate,
+                endDate: e.endDate,
+            };
+        });
 
         res.status(200).json({
             status: 'success',
             data: {
                 household: transformedHousehold,
                 tasks: tasks,
-                storeItems: storeItems
+                storeItems: storeItems,
+                events: transformedEvents
             }
         });
 
