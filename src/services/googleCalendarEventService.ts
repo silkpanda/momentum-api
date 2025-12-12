@@ -92,7 +92,7 @@ export const createEvent = async (userId: string, householdId: string, eventData
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         allDay: allDay || false,
-        attendees: attendees || [],
+        attendees: attendees ? attendees.map(id => new Types.ObjectId(id)) : [],
         calendarType,
         color: eventColor,
     });
@@ -201,7 +201,7 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
     if (allDay !== undefined) event.allDay = allDay;
     if (location !== undefined) event.location = location;
     if (notes !== undefined) event.description = notes;
-    if (attendees !== undefined) event.attendees = attendees;
+    if (attendees !== undefined) event.attendees = attendees.map(id => new Types.ObjectId(id));
     event.calendarType = calendarType;
     event.color = eventColor;
     await event.save();
