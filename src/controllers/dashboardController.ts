@@ -17,14 +17,26 @@ export const getDashboardData = async (req: AuthenticatedRequest, res: Response,
         const householdId = req.householdId;
 
         // Fetch data in parallel (including calendar events)
+        // Load events for current month ± 1 month for smooth navigation
+        const oneMonthAgo = new Date();
+        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+        oneMonthAgo.setDate(1); // Start of previous month
+
+        const twoMonthsAhead = new Date();
+        twoMonthsAhead.setMonth(twoMonthsAhead.getMonth() + 2);
+        twoMonthsAhead.setDate(1); // Start of month after next
+
         const [household, tasks, storeItems, events] = await Promise.all([
             Household.findById(householdId).populate('memberProfiles.familyMemberId'),
             Task.find({ householdId }).populate('assignedTo.memberId').populate('createdBy'),
             StoreItem.find({ householdId }),
             Event.find({
                 householdId,
-                startDate: { $gte: new Date() } // Only future/current events
-            }).sort({ startDate: 1 }).limit(100) // Limit to prevent huge payloads
+                startDate: {
+                    $gte: oneMonthAgo,
+                    $lt: twoMonthsAhead
+                }
+            }).sort({ startDate: 1 })
         ]);
 
         if (!household) {
