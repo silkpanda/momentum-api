@@ -222,17 +222,17 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
 
         // Merge: Google events + unsynced DB events
         const REVERSE_COLOR_MAP: { [key: string]: string } = {
-            '1': '#6366F1',  // Indigo/Lavender
-            '2': '#3B82F6',  // Sage/Green -> Mapping to Blue for now or custom
-            '3': '#8B5CF6',  // Grape/Violet
-            '4': '#EC4899',  // Flamingo/Pink
-            '5': '#F59E0B',  // Banana/Yellow-Amber
-            '6': '#F97316',  // Tangerine/Orange
-            '7': '#06B6D4',  // Peacock/Cyan
-            '8': '#6B7280',  // Graphite/Gray
-            '9': '#3B82F6',  // Blueberry/Blue (Default)
-            '10': '#10B981', // Basil/Green
-            '11': '#EF4444', // Tomato/Red
+            '1': '#7986CB',  // Lavender
+            '2': '#33B679',  // Sage
+            '3': '#8E24AA',  // Grape
+            '4': '#E67C73',  // Flamingo
+            '5': '#F6BF26',  // Banana
+            '6': '#F4511E',  // Tangerine
+            '7': '#039BE5',  // Peacock
+            '8': '#616161',  // Graphite
+            '9': '#3F51B5',  // Blueberry
+            '10': '#0B8043', // Basil
+            '11': '#D50000', // Tomato
         };
 
         const mapGoogleEvent = (e: any) => ({
@@ -432,7 +432,7 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
 
         // Map hex color to Google Calendar color ID
         const COLOR_MAP: { [key: string]: string } = {
-            // Tailwind Colors (Legacy/Web)
+            // Tailwind Colors (Web/Legacy Fallbacks)
             '#EF4444': '11', // Red
             '#F97316': '6',  // Orange
             '#F59E0B': '5',  // Amber
@@ -444,17 +444,18 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
             '#EC4899': '4',  // Pink
             '#6B7280': '8',  // Gray
 
-            // Mobile App PROFILE_COLORS Matches
-            '#4285F4': '9',  // Blueberry
-            '#1967D2': '9',  // Celtic Blue -> Blue
-            '#FBBC04': '5',  // Selective Yellow -> Yellow
-            '#F72A25': '11', // Pigment Red -> Red
-            '#34A853': '10', // Sea Green -> Green
-            '#188038': '10', // Dark Spring Green -> Green
-            '#FF8C00': '6',  // Tangerine
+            // Standard Google Calendar Colors (Exact Matches)
+            '#7986CB': '1',  // Lavender
+            '#33B679': '2',  // Sage
             '#8E24AA': '3',  // Grape
             '#E67C73': '4',  // Flamingo
+            '#F6BF26': '5',  // Banana
+            '#F4511E': '6',  // Tangerine
             '#039BE5': '7',  // Peacock
+            '#616161': '8',  // Graphite
+            '#3F51B5': '9',  // Blueberry
+            '#0B8043': '10', // Basil
+            '#D50000': '11', // Tomato
         };
         const googleColorId = COLOR_MAP[eventColor.toUpperCase()] || undefined; // If no match, undefined = inherit calendar color
 
