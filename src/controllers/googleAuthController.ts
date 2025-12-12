@@ -324,59 +324,172 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
         // Get or create household
         let household;
         let actualHouseholdId = householdId;
+        const currentContextHouseholdId = (req as any).householdId; // From the current token (Placeholder)
 
-        if (householdId) {
+        if (inviteCode) {
+            // JOINING VIA INVITE CODE
+            console.log(`[Onboarding] Attempting to join with invite code: ${inviteCode}`);
+            household = await Household.findOne({ inviteCode: inviteCode.toUpperCase() });
+
+            if (!household) {
+                return next(new AppError('Invalid invite code', 404));
+            }
+
+            // Check if already a member
+            const isMember = household.memberProfiles.some(
+                (p) => p.familyMemberId.toString() === userId.toString()
+            );
+
+            if (!isMember) {
+                // Add to household
+                const newProfile: IHouseholdMemberProfile = {
+                    familyMemberId: userId,
+                    displayName,
+                    profileColor,
+                    role: 'Parent',
+                    pointsTotal: 0,
+                };
+                household.memberProfiles.push(newProfile);
+                await household.save();
+                console.log(`[Onboarding] User joined household: ${household._id}`);
+
+                // --- ZOMBIE HOUSEHOLD CLEANUP ---
+                // If user came from a placeholder household (single member), delete it
+                if (currentContextHouseholdId && currentContextHouseholdId.toString() !== household._id.toString()) {
+                    try {
+                        const oldHousehold = await Household.findById(currentContextHouseholdId);
+                        if (oldHousehold && oldHousehold.memberProfiles.length <= 1) {
+                            console.log(`[Onboarding] Cleaning up placeholder household: ${currentContextHouseholdId}`);
+                            await Household.findByIdAndDelete(currentContextHouseholdId);
+                            // Note: No need to delete Tasks/StoreItems as they shouldn't exist yet for a placeholder
+                        }
+                    } catch (cleanupErr) {
+                        console.error('[Onboarding] Failed to cleanup placeholder household:', cleanupErr);
+                        // Non-blocking error
+                    }
+                }
+            } else {
+                // Already a member, just update profile if needed
+                const memberProfile = household.memberProfiles.find(
+                    (p) => p.familyMemberId.toString() === userId.toString()
+                );
+                if (memberProfile) {
+                    memberProfile.displayName = displayName;
+                    memberProfile.profileColor = profileColor;
+                    await household.save();
+                }
+            }
+
+            actualHouseholdId = (household._id as Types.ObjectId).toString();
+
+        } else if (householdId) {
             // Try to find existing household
             household = await Household.findById(householdId);
+
+            if (!household) {
+                // Fallback if ID provided but not found (rare)
+                console.log('[Onboarding] Household ID provided but not found');
+            } else {
+                // Update existing household
+                console.log('[Onboarding] Updating existing household');
+
+                // Update household name if provided
+                if (householdName) {
+                    household.householdName = householdName;
+                }
+                if (familyColor) {
+                    household.familyColor = familyColor;
+                }
+
+                const memberProfile = household.memberProfiles.find(
+                    (p) => p.familyMemberId.toString() === userId
+                );
+
+                if (memberProfile) {
+                    memberProfile.displayName = displayName;
+                    memberProfile.profileColor = profileColor;
+                    await household.save();
+                }
+                actualHouseholdId = (household._id as Types.ObjectId).toString();
+            }
         }
 
         if (!household) {
             // No household found - create one
-            console.log('[Onboarding] No household found, creating new household');
+            console.log('[Onboarding] Creating new household');
 
             if (!householdName) {
-                return next(new AppError('Household name is required when creating a new household', 400));
+                // Use default name if somehow missing
+                const safeHouseholdName = `${displayName || 'Family'}'s Household`;
+                // return next(new AppError('Household name is required when creating a new household', 400));
+                // Relaxed: create with default if missing, though frontend should prevent this
+                console.warn('[Onboarding] No household name provided, using default');
+
+                // Reuse existing logic
+                const parentId: Types.ObjectId = familyMember._id as Types.ObjectId;
+                const creatorProfile: IHouseholdMemberProfile = {
+                    familyMemberId: parentId,
+                    displayName,
+                    profileColor,
+                    role: 'Parent',
+                    pointsTotal: 0,
+                };
+                household = await Household.create({
+                    householdName: safeHouseholdName,
+                    familyColor: familyColor || '#8B5CF6',
+                    memberProfiles: [creatorProfile],
+                });
+                actualHouseholdId = (household._id as Types.ObjectId).toString();
+            } else {
+                const parentId: Types.ObjectId = familyMember._id as Types.ObjectId;
+
+                const creatorProfile: IHouseholdMemberProfile = {
+                    familyMemberId: parentId,
+                    displayName,
+                    profileColor,
+                    role: 'Parent',
+                    pointsTotal: 0,
+                };
+
+                household = await Household.create({
+                    householdName,
+                    familyColor: familyColor || '#8B5CF6',
+                    memberProfiles: [creatorProfile],
+                });
+                actualHouseholdId = (household._id as Types.ObjectId).toString();
             }
 
-            const parentId: Types.ObjectId = familyMember._id as Types.ObjectId;
-
-            const creatorProfile: IHouseholdMemberProfile = {
-                familyMemberId: parentId,
-                displayName,
-                profileColor,
-                role: 'Parent',
-                pointsTotal: 0,
-            };
-
-            household = await Household.create({
-                householdName,
-                familyColor: familyColor || '#8B5CF6', // NEW: Set family color
-                memberProfiles: [creatorProfile],
-            });
-
-            actualHouseholdId = (household._id as Types.ObjectId).toString();
             console.log('[Onboarding] Created new household:', actualHouseholdId);
-        } else {
-            // Update existing household
-            console.log('[Onboarding] Updating existing household');
 
-            // Update household name if provided (and not joining with invite code)
-            if (householdName && !inviteCode) {
-                household.householdName = householdName;
-            }
-            if (familyColor) {
-                household.familyColor = familyColor;
-            }
+            // --- ZOMBIE CLEANUP (UPDATE SCENARIO) ---
+            // If we created a *new* household, but we were already in a placeholder (different ID),
+            // and that placeholder is empty/single, delete it.
+            // This happens if user chooses "Create New" instead of "Update Current" (though usually we update current).
+            // But if `householdId` was NOT passed, we might be creating a fresh one.
+            // Be careful to not delete the household we just created.
 
-            const memberProfile = household.memberProfiles.find(
-                (p) => p.familyMemberId.toString() === userId
-            );
-
-            if (memberProfile) {
-                memberProfile.displayName = displayName;
-                memberProfile.profileColor = profileColor;
-                await household.save();
+            if (currentContextHouseholdId && currentContextHouseholdId.toString() !== actualHouseholdId) {
+                try {
+                    const oldHousehold = await Household.findById(currentContextHouseholdId);
+                    // Only delete if it looks like a placeholder (1 member) AND it's not the one we just made
+                    if (oldHousehold && oldHousehold.memberProfiles.length <= 1) {
+                        console.log(`[Onboarding] Cleaning up previous placeholder household: ${currentContextHouseholdId}`);
+                        await Household.findByIdAndDelete(currentContextHouseholdId);
+                    }
+                } catch (cleanupErr) {
+                    console.error('[Onboarding] Failed to cleanup placeholder household:', cleanupErr);
+                }
             }
+        } else if (!inviteCode && householdId) {
+            // We already handled "Update Existing" inside the "else" block of "if (!household)"?
+            // No, the logic flow above was:
+            // 1. if (inviteCode) -> join
+            // 2. else if (householdId) -> find
+            // 3. if (!household) -> create
+
+            // So the "else" block of "if (!household)" handles Creation.
+            // The "Update" happened inside block 2.
+            // Logic is sound.
         }
 
         // Handle calendar creation/sync based on calendarChoice

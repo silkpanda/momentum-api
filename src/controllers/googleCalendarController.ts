@@ -165,7 +165,7 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         await ensureValidToken(familyMember);
 
         const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-        const calendarId = familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
+        const household = await Household.findById(householdId);
 
         let timeMin = req.query.timeMin as string;
         if (!timeMin) {
@@ -182,24 +182,71 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         }).sort({ startDate: 1 });
         console.log(`[Sync] Found ${scopedDbEvents.length} events in DB`);
 
-        const listParams: any = {
-            calendarId,
-            timeMin,
-            maxResults: 200,
-            singleEvents: true,
-            orderBy: 'startTime',
-        };
+        // Determine which calendars to fetch
+        const calendarIdsToFetch = new Set<string>();
 
-        if (req.query.timeMax) {
-            listParams.timeMax = req.query.timeMax;
+        // 1. Personal Calendar (if selected)
+        if (familyMember.googleCalendar?.selectedCalendarId) {
+            calendarIdsToFetch.add(familyMember.googleCalendar.selectedCalendarId);
+        } else {
+            calendarIdsToFetch.add('primary'); // Fallback to primary
         }
 
-        console.log(`[Google Calendar] Fetching events for ${calendarId} from ${timeMin}`);
+        // 2. Family Calendar (if different)
+        if (household?.familyCalendarId) {
+            calendarIdsToFetch.add(household.familyCalendarId);
+        }
 
-        const response = await calendar.events.list(listParams);
-        const googleEvents = response.data.items || [];
+        // 3. Child Calendars (Fetch all household members)
+        if (household && household.memberProfiles) {
+            const memberIds = household.memberProfiles.map(p => p.familyMemberId);
+            const allMembers = await FamilyMember.find({ _id: { $in: memberIds } });
 
-        console.log(`[Google Calendar] Found ${googleEvents.length} events from Google API`);
+            allMembers.forEach(member => {
+                if (member.googleCalendar?.selectedCalendarId) {
+                    // Only add if it's a valid string
+                    calendarIdsToFetch.add(member.googleCalendar.selectedCalendarId);
+                }
+            });
+        }
+
+        console.log(`[Google Calendar] Fetching events from:`, Array.from(calendarIdsToFetch));
+
+        let googleEvents: any[] = [];
+
+        // Fetch from all targets in parallel
+        await Promise.all(Array.from(calendarIdsToFetch).map(async (targetCalendarId) => {
+            try {
+                const listParams: any = {
+                    calendarId: targetCalendarId,
+                    timeMin,
+                    maxResults: 100, // Limit per calendar to avoid huge payloads
+                    singleEvents: true,
+                    orderBy: 'startTime',
+                };
+
+                if (req.query.timeMax) {
+                    listParams.timeMax = req.query.timeMax;
+                }
+
+                const response = await calendar.events.list(listParams);
+                if (response.data.items) {
+                    // Tag them so we know source (optional, but useful for debugging)
+                    const items = response.data.items.map(item => ({ ...item, _sourceCalendarId: targetCalendarId }));
+                    googleEvents.push(...items);
+                }
+            } catch (err: any) {
+                console.error(`[Google Calendar] Failed to fetch events from ${targetCalendarId}:`, err.message);
+                // Continue fetching others even if one fails
+            }
+        }));
+
+        // Deduplicate events by ID (just in case)
+        const uniqueEventsMap = new Map();
+        googleEvents.forEach(e => uniqueEventsMap.set(e.id, e));
+        googleEvents = Array.from(uniqueEventsMap.values());
+
+        console.log(`[Google Calendar] Total unique events found: ${googleEvents.length}`);
 
         // ... (Reconciliation logic is commented out above) ...
 

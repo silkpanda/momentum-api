@@ -19,15 +19,16 @@ const signToken = (id: string, householdId: string): string => {
 
 export const signup = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
   const { firstName, lastName, email, password } = req.body;
-  const { householdName, userDisplayName, userProfileColor, inviteCode } = req.body;
+  // These are now optional
+  let { householdName, userDisplayName, userProfileColor, inviteCode } = req.body;
 
-  if (!firstName || !lastName || !email || !password || !userDisplayName || !userProfileColor) {
-    return next(new AppError('Missing mandatory fields (firstName, lastName, email, password, userDisplayName, userProfileColor).', 400));
+  if (!firstName || !lastName || !email || !password) {
+    return next(new AppError('Missing mandatory fields (firstName, lastName, email, password).', 400));
   }
 
-  if (!inviteCode && !householdName) {
-    return next(new AppError('householdName is required when creating a new household.', 400));
-  }
+  // Set defaults for optional fields
+  if (!userDisplayName) userDisplayName = firstName;
+  if (!userProfileColor) userProfileColor = '#6366f1'; // Default Indigo
 
   try {
     const newParent = await FamilyMember.create({
@@ -35,6 +36,7 @@ export const signup = asyncHandler(async (req: Request, res: Response, next: Nex
       lastName,
       email,
       password,
+      onboardingCompleted: false, // Explicitly set to false
     });
 
     const parentId: Types.ObjectId = newParent._id as Types.ObjectId;
@@ -42,6 +44,7 @@ export const signup = asyncHandler(async (req: Request, res: Response, next: Nex
     let household;
 
     if (inviteCode) {
+      // Joining existing household via code
       household = await Household.findOne({ inviteCode: inviteCode.toUpperCase() });
 
       if (!household) {
@@ -70,7 +73,8 @@ export const signup = asyncHandler(async (req: Request, res: Response, next: Nex
       await household.save();
       householdId = household._id as Types.ObjectId;
 
-    } else {
+    } else if (householdName) {
+      // Creating a specific new household (e.g. from full form if we kept it)
       const creatorProfile: IHouseholdMemberProfile = {
         familyMemberId: parentId,
         displayName: userDisplayName,
@@ -81,6 +85,21 @@ export const signup = asyncHandler(async (req: Request, res: Response, next: Nex
 
       household = await Household.create({
         householdName,
+        memberProfiles: [creatorProfile],
+      });
+      householdId = household._id as Types.ObjectId;
+    } else {
+      // Placeholder Household Logic (Minimal Signup)
+      const creatorProfile: IHouseholdMemberProfile = {
+        familyMemberId: parentId,
+        displayName: userDisplayName,
+        profileColor: userProfileColor,
+        role: 'Parent',
+        pointsTotal: 0,
+      };
+
+      household = await Household.create({
+        householdName: `${firstName}'s Household`, // Placeholder name
         memberProfiles: [creatorProfile],
       });
       householdId = household._id as Types.ObjectId;
@@ -99,6 +118,7 @@ export const signup = asyncHandler(async (req: Request, res: Response, next: Nex
       data: {
         parent: userWithRole,
         household,
+        needsOnboarding: true, // Signal to frontend to redirect
       },
     });
 
