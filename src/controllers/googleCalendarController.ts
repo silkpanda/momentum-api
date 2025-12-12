@@ -199,9 +199,10 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         }
 
         // 3. Child Calendars (Fetch all household members)
+        let allMembers: any[] = [];
         if (household && household.memberProfiles) {
             const memberIds = household.memberProfiles.map(p => p.familyMemberId);
-            const allMembers = await FamilyMember.find({ _id: { $in: memberIds } });
+            allMembers = await FamilyMember.find({ _id: { $in: memberIds } });
 
             allMembers.forEach(member => {
                 if (member.googleCalendar?.selectedCalendarId) {
@@ -249,13 +250,34 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
 
         console.log(`[Google Calendar] Total unique events found: ${googleEvents.length}`);
 
+        // Create Color Map: SourceCalendarId -> Momentum Hex Color
+        const calendarColorMap = new Map<string, string>();
+
+        if (household) {
+            // Family Calendar Color
+            if (household.familyCalendarId && household.familyColor) {
+                calendarColorMap.set(household.familyCalendarId, household.familyColor);
+            }
+
+            // Member Profile Colors
+            if (household.memberProfiles && allMembers.length > 0) {
+                household.memberProfiles.forEach(profile => {
+                    const member = allMembers.find(m => m._id.toString() === profile.familyMemberId.toString());
+                    if (member && member.googleCalendar?.selectedCalendarId && profile.profileColor) {
+                        calendarColorMap.set(member.googleCalendar.selectedCalendarId, profile.profileColor);
+                    }
+                });
+            }
+        }
+
         // [SYNC ENGINE]: Persist to DB for offline access + Pruning
         // We await this so the DB is ready immediately (though we could fire-and-forget for speed)
         await syncGoogleEventsToDb(
             householdId,
             googleEvents,
             timeMin,
-            req.query.timeMax as string
+            req.query.timeMax as string,
+            calendarColorMap // Pass the color map
         );
 
         // ... (Reconciliation logic is commented out above) ...
@@ -588,7 +610,8 @@ const syncGoogleEventsToDb = async (
     householdId: string,
     googleEvents: any[],
     timeMin: string,
-    timeMax?: string
+    timeMax?: string,
+    calendarColorMap?: Map<string, string>
 ) => {
     try {
         if (!householdId) return;
@@ -641,10 +664,16 @@ const syncGoogleEventsToDb = async (
             }
 
             // Determine Color
-            // If explicit colorId, map it. If null, default to Blue or household default?
-            // Google events often lack colorId if they use the calendar default.
-            // We'll stick to a safe default if missing.
-            const color = ge.colorId ? REVERSE_COLOR_MAP[ge.colorId] : '#3B82F6';
+            // [COLOR NORMALIZATION]: Check if we have a forced override for this calendar source
+            let color = '#3B82F6'; // Fallback Default
+
+            if (ge._sourceCalendarId && calendarColorMap?.has(ge._sourceCalendarId)) {
+                // FORCE: Use the Momentum color for this calendar (Family or Member Profile)
+                color = calendarColorMap.get(ge._sourceCalendarId)!;
+            } else if (ge.colorId) {
+                // Fallback: Use Google Event color if avail
+                color = REVERSE_COLOR_MAP[ge.colorId] || '#3B82F6';
+            }
 
             // Clean Title (remove appended names if possible? No, difficult to know original. Keep valid summary.)
             const title = ge.summary || 'No Title';
