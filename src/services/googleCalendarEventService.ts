@@ -219,27 +219,39 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
             await ensureValidToken(familyMember);
             const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
+            // Determine the current calendar ID (fallback to primary/selected if missing in DB)
+            const currentCalendarId = event.googleCalendarId || familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
+            let calendarIdToUpdate = currentCalendarId;
+
             // Check if we need to MOVE the event to a different calendar
-            if (event.googleCalendarId && event.googleCalendarId !== targetCalendarId) {
-                console.log(`Moving event ${event.googleEventId} from ${event.googleCalendarId} to ${targetCalendarId}`);
+            if (currentCalendarId && targetCalendarId && currentCalendarId !== targetCalendarId) {
+                console.log(`[Move Required] Event ${event.googleEventId} needs moving from ${currentCalendarId} to ${targetCalendarId}`);
                 try {
                     const moveResponse = await calendar.events.move({
-                        calendarId: event.googleCalendarId,
+                        calendarId: currentCalendarId,
                         eventId: event.googleEventId,
                         destination: targetCalendarId,
                     });
 
-                    // Update the event ID if it changed (it might change on move depending on GCal logic, usually stays same but good to return new obj)
+                    // Update the event ID if it changed
                     if (moveResponse.data.id) {
                         event.googleEventId = moveResponse.data.id;
                     }
-                    console.log('Event moved successfully');
+
+                    // CRITICAL: Only switch the update target if the move succeeded
+                    calendarIdToUpdate = targetCalendarId;
+                    console.log('✅ Event moved successfully');
                 } catch (moveError: any) {
-                    console.error('Failed to move event:', moveError);
-                    // If move fails, we might still want to try updating, but it's risky. 
-                    // Usually means permissions issue or event not found.
-                    // For now, we'll log it and try to proceed with the update on the *new* calendar ID 
-                    // which might fail with 404, but that's better than crashing here.
+                    console.error('❌ Failed to move event:', moveError.message);
+                    console.warn('⚠️ Falling back to updating event on original calendar to ensure data consistency.');
+                    // calendarIdToUpdate remains currentCalendarId, so we patch the old calendar
+                }
+            } else {
+                // No move needed, but ensure we are targeting the correct calendar (e.g. if we just assumed current was target)
+                // If we didn't enter the if-block, it means IDs are same or one is missing. 
+                // If currentCalendarId is known, use it. If not, we might be in trouble, but let's default to target.
+                if (currentCalendarId === targetCalendarId) {
+                    calendarIdToUpdate = targetCalendarId;
                 }
             }
 
@@ -267,12 +279,20 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
 
             if (googleColorId) googleEvent.colorId = googleColorId;
 
+            console.log(`[Patching Event] ID: ${event.googleEventId} on Calendar: ${calendarIdToUpdate}`);
             const response = await calendar.events.patch({
-                calendarId: targetCalendarId, // targetCalendarId is now correct (either original or the destination we moved into)
+                calendarId: calendarIdToUpdate,
                 eventId: event.googleEventId,
                 requestBody: googleEvent,
             });
             googleResponse = response.data;
+
+            // If we successfully patched, and we INTENDED to move but failed, we still save the DB state.
+            // But if we successfully MOVED, we must update the DB's googleCalendarId
+            if (calendarIdToUpdate === targetCalendarId) {
+                event.googleCalendarId = targetCalendarId;
+                await event.save();
+            }
 
         } catch (error: any) {
             console.error('Google Calendar update error:', error);
