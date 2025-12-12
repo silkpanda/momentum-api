@@ -223,6 +223,15 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
             let currentCalendarId = event.googleCalendarId || familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
             let calendarIdToUpdate = currentCalendarId;
 
+            console.log('--- [Move Logic Diagnostic] ---');
+            console.log('Event ID:', event._id);
+            console.log('Google Event ID:', event.googleEventId);
+            console.log('Current DB Calendar ID:', event.googleCalendarId);
+            console.log('Resolved Current ID:', currentCalendarId);
+            console.log('Resolved Target ID:', targetCalendarId);
+            console.log('Ids Match?', currentCalendarId === targetCalendarId);
+            console.log('-------------------------------');
+
             // HELPER: Recover lost event location
             const recoverEventLocation = async (missingEventId: string): Promise<string | null> => {
                 console.log(`[Recovery] Attempting to find event ${missingEventId} in all user calendars...`);
@@ -295,7 +304,78 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
                             console.warn('⚠️ Could not recover event location. Fallback to original intent (risky).');
                         }
                     } else {
-                        console.warn('⚠️ Falling back to updating event on original calendar to ensure data consistency.');
+                        // MANUAL MOVE STRATEGY: API Move failed (likely permissions), try Clone & Delete
+                        console.log(`[Manual Move] API move failed. Attempting Clone & Delete: ${currentCalendarId} -> ${targetCalendarId}`);
+                        try {
+                            // 1. Get original event to preserve details not in DB
+                            const originalEventRes = await calendar.events.get({
+                                calendarId: currentCalendarId,
+                                eventId: event.googleEventId,
+                            });
+                            const originalEvent = originalEventRes.data;
+
+                            // 2. Insert copy to new calendar
+                            // Merge original details with our DB updates
+                            const newEventBody = {
+                                ...originalEvent,
+                                summary: googleCalendarTitle, // Use updated title
+                                location: event.location,
+                                description: event.description,
+                                start: event.allDay
+                                    ? { date: event.startDate.toISOString().split('T')[0] }
+                                    : { dateTime: event.startDate.toISOString() },
+                                end: event.allDay
+                                    ? { date: event.endDate.toISOString().split('T')[0] }
+                                    : { dateTime: event.endDate.toISOString() },
+                                id: undefined, // Clear ID to let Google generate new one
+                                htmlLink: undefined,
+                                iCalUID: undefined,
+                                attendees: undefined // manage attendees separately if needed, but here we likely want new logic
+                            };
+
+                            // Re-apply correct color
+                            const COLOR_MAP_MANUAL: { [key: string]: string } = {
+                                '#EF4444': '11', '#F97316': '6', '#F59E0B': '5', '#10B981': '10',
+                                '#06B6D4': '7', '#3B82F6': '9', '#6366F1': '1', '#8B5CF6': '3',
+                                '#EC4899': '4', '#6B7280': '8', '#7986CB': '1', '#33B679': '2',
+                                '#8E24AA': '3', '#E67C73': '4', '#F6BF26': '5', '#F4511E': '6',
+                                '#039BE5': '7', '#616161': '8', '#3F51B5': '9', '#0B8043': '10',
+                                '#D50000': '11',
+                            };
+                            if (eventColor && COLOR_MAP_MANUAL[eventColor.toUpperCase()]) {
+                                newEventBody.colorId = COLOR_MAP_MANUAL[eventColor.toUpperCase()];
+                            }
+
+                            const insertResponse = await calendar.events.insert({
+                                calendarId: targetCalendarId,
+                                requestBody: newEventBody,
+                            });
+
+                            // 3. Update DB with NEW ID
+                            if (insertResponse.data.id) {
+                                event.googleEventId = insertResponse.data.id;
+                                event.googleCalendarId = targetCalendarId;
+                                calendarIdToUpdate = targetCalendarId; // Ensure subsequent patch targets correct cal
+                                console.log(`✅ Manual Move (Insert) successful. New ID: ${insertResponse.data.id}`);
+
+                                // 4. Delete original event (Clean up)
+                                try {
+                                    await calendar.events.delete({
+                                        calendarId: currentCalendarId,
+                                        eventId: originalEventRes.data.id!,
+                                    });
+                                    console.log('✅ Manual Move (Delete) successful');
+                                } catch (delErr) {
+                                    console.warn('⚠️ Manual Move: Failed to delete original event (duplicate may exist):', delErr);
+                                }
+
+                                await event.save();
+                            }
+
+                        } catch (manualErr: any) {
+                            console.error('❌ Manual Move failed:', manualErr.message);
+                            console.warn('⚠️ Falling back to updating event on original calendar.');
+                        }
                     }
                 }
             } else {
