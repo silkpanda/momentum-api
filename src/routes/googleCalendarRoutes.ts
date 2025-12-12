@@ -5,6 +5,7 @@ import {
     getCalendarEvents,
     listCalendars,
     createCalendarEvent,
+    updateGoogleEvent,
 } from '../controllers/googleCalendarController';
 
 const router = express.Router();
@@ -17,6 +18,9 @@ router.get('/events', protect, getCalendarEvents);
 
 // Create calendar event
 router.post('/events', protect, createCalendarEvent);
+
+// Update calendar event
+router.patch('/events/:id', protect, updateGoogleEvent);
 
 // List user's calendars
 router.get('/list', protect, listCalendars);
