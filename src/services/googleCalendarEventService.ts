@@ -28,6 +28,53 @@ interface UpdateEventData {
     attendees?: string[];
 }
 
+// HELPER: Ensure a member has a linked calendar ID
+const ensureMemberCalendarLink = async (
+    member: any,
+    parentMember: any,
+    oauthClient: any
+): Promise<string | undefined> => {
+    console.log(`[Calendar Link] Checking link for member: ${member.firstName} (ID: ${member._id})`);
+
+    if (member.googleCalendar?.selectedCalendarId) {
+        console.log(`[Calendar Link] Member already has ID: ${member.googleCalendar.selectedCalendarId}`);
+        return member.googleCalendar.selectedCalendarId;
+    }
+
+    // If no ID, try to find a calendar with their name
+    console.log(`[Calendar Link] Missing ID for ${member.firstName}. Scanning parent calendars...`);
+    try {
+        const calendar = google.calendar({ version: 'v3', auth: oauthClient });
+        const listRes = await calendar.calendarList.list({ minAccessRole: 'writer' });
+        const calendars = listRes.data.items || [];
+
+        console.log(`[Calendar Link] Found ${calendars.length} calendars. Summaries: ${calendars.map(c => `'${c.summary}'`).join(', ')}`);
+
+        // Match by summary (Name) - Case insensitive scan
+        const match = calendars.find(c =>
+            c.summary?.trim().toLowerCase() === member.firstName.trim().toLowerCase() ||
+            c.summary?.trim().toLowerCase() === member.displayName?.trim().toLowerCase()
+        );
+
+        if (match && match.id) {
+            console.log(`[Calendar Link] FOUND match: '${match.summary}' (${match.id}). Linking to profile.`);
+
+            // Save to member profile efficiently
+            if (!member.googleCalendar) member.googleCalendar = {};
+            member.googleCalendar.selectedCalendarId = match.id;
+            await member.save();
+
+            return match.id;
+        } else {
+            console.log(`[Calendar Link] NO MATCH found for '${member.firstName}' or '${member.displayName}'`);
+        }
+    } catch (err) {
+        console.error('[Calendar Link] Failed to scan calendars:', err);
+    }
+
+    return undefined;
+};
+
 export const createEvent = async (userId: string, householdId: string, eventData: CreateEventData) => {
     const { title, startDate, endDate, allDay, location, notes, attendees } = eventData;
 
@@ -62,7 +109,10 @@ export const createEvent = async (userId: string, householdId: string, eventData
             throw new AppError('Attendee not found', 404);
         }
 
-        targetCalendarId = attendeeMember.googleCalendar?.selectedCalendarId || familyMember.email;
+        // Try to heal link if missing
+        const healedCalendarId = await ensureMemberCalendarLink(attendeeMember, familyMember, oauth2Client);
+        targetCalendarId = healedCalendarId || familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
+
         eventColor = attendeeProfile.profileColor;
         googleCalendarTitle = title;
 
@@ -182,7 +232,11 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
             p => p.familyMemberId.toString() === finalAttendees[0].toString()
         );
         if (!attendeeMember || !attendeeProfile) throw new AppError('Attendee not found', 404);
-        targetCalendarId = attendeeMember.googleCalendar?.selectedCalendarId || familyMember.email;
+
+        // Try to heal link if missing
+        const healedCalendarId = await ensureMemberCalendarLink(attendeeMember, familyMember, oauth2Client);
+        targetCalendarId = healedCalendarId || familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
+
         eventColor = attendeeProfile.profileColor;
         googleCalendarTitle = title || event.title;
     } else {
