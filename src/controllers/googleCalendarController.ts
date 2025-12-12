@@ -213,6 +213,15 @@ export const updateGoogleEvent = asyncHandler(async (req: any, res: Response, ne
             console.log(`[Google Calendar] Event updated: ${event.googleEventId}`);
         }
 
+        // Emit WebSocket event regardless of sync status (since DB is updated)
+        const io = req.app.get('io');
+        if (io) {
+            io.to(householdId.toString()).emit('event_updated', {
+                action: 'updated',
+                eventId: (event as any)._id.toString()
+            });
+        }
+
         if (syncError) {
             res.status(200).json({
                 status: 'success',
@@ -224,15 +233,6 @@ export const updateGoogleEvent = asyncHandler(async (req: any, res: Response, ne
                 },
             });
         } else {
-            // Emit WebSocket event
-            const io = req.app.get('io');
-            if (io) {
-                io.to(householdId.toString()).emit('event_updated', {
-                    action: 'updated',
-                    eventId: (event as any)._id.toString()
-                });
-            }
-
             res.status(200).json({
                 status: 'success',
                 data: {
