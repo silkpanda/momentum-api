@@ -48,3 +48,4 @@ cleanup-orphaned-links.ts
 cleanup-real-data.ts
 list-and-clean-households.ts
 verify-linked-child.ts
+scripts/delete-user.ts
