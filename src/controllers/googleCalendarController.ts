@@ -224,6 +224,15 @@ export const updateGoogleEvent = asyncHandler(async (req: any, res: Response, ne
                 },
             });
         } else {
+            // Emit WebSocket event
+            const io = req.app.get('io');
+            if (io) {
+                io.to(householdId.toString()).emit('event_updated', {
+                    action: 'updated',
+                    eventId: (event as any)._id.toString()
+                });
+            }
+
             res.status(200).json({
                 status: 'success',
                 data: {
@@ -236,6 +245,43 @@ export const updateGoogleEvent = asyncHandler(async (req: any, res: Response, ne
 
     } catch (error: any) {
         console.error('Update event error:', error);
+        next(error);
+    }
+});
+
+/**
+ * @desc    Delete a Google Calendar event
+ * @route   DELETE /api/v1/calendar/google/events/:id
+ * @access  Protected
+ */
+export const deleteGoogleEvent = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
+    const userId = req.user?._id;
+    const householdId = req.householdId;
+    const { id } = req.params;
+
+    try {
+        await import('../services/googleCalendarEventService').then(s =>
+            s.deleteEvent(userId, householdId.toString(), id)
+        );
+
+        console.log(`[DB] Event deleted: ${id}`);
+
+        // Emit WebSocket event
+        const io = req.app.get('io');
+        if (io) {
+            io.to(householdId.toString()).emit('event_updated', {
+                action: 'deleted',
+                eventId: id
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Event deleted successfully',
+        });
+
+    } catch (error: any) {
+        console.error('Delete event error:', error);
         next(error);
     }
 });

@@ -219,6 +219,30 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
             await ensureValidToken(familyMember);
             const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
+            // Check if we need to MOVE the event to a different calendar
+            if (event.googleCalendarId && event.googleCalendarId !== targetCalendarId) {
+                console.log(`Moving event ${event.googleEventId} from ${event.googleCalendarId} to ${targetCalendarId}`);
+                try {
+                    const moveResponse = await calendar.events.move({
+                        calendarId: event.googleCalendarId,
+                        eventId: event.googleEventId,
+                        destination: targetCalendarId,
+                    });
+
+                    // Update the event ID if it changed (it might change on move depending on GCal logic, usually stays same but good to return new obj)
+                    if (moveResponse.data.id) {
+                        event.googleEventId = moveResponse.data.id;
+                    }
+                    console.log('Event moved successfully');
+                } catch (moveError: any) {
+                    console.error('Failed to move event:', moveError);
+                    // If move fails, we might still want to try updating, but it's risky. 
+                    // Usually means permissions issue or event not found.
+                    // For now, we'll log it and try to proceed with the update on the *new* calendar ID 
+                    // which might fail with 404, but that's better than crashing here.
+                }
+            }
+
             const COLOR_MAP: { [key: string]: string } = {
                 '#EF4444': '11', '#F97316': '6', '#F59E0B': '5', '#10B981': '10',
                 '#06B6D4': '7', '#3B82F6': '9', '#6366F1': '1', '#8B5CF6': '3',
@@ -244,7 +268,7 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
             if (googleColorId) googleEvent.colorId = googleColorId;
 
             const response = await calendar.events.patch({
-                calendarId: targetCalendarId,
+                calendarId: targetCalendarId, // targetCalendarId is now correct (either original or the destination we moved into)
                 eventId: event.googleEventId,
                 requestBody: googleEvent,
             });
@@ -257,4 +281,34 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
     }
 
     return { event, googleResponse, syncError, eventColor };
+};
+
+export const deleteEvent = async (userId: string, householdId: string, eventId: string) => {
+    const familyMember = await FamilyMember.findById(userId);
+    if (!familyMember) throw new AppError('User not found', 404);
+
+    const event = await Event.findById(eventId);
+    if (!event) throw new AppError('Event not found', 404);
+    if (event.householdId.toString() !== householdId) throw new AppError('Unauthorized', 403);
+
+    // Delete from Google Calendar
+    if (event.googleEventId && event.googleCalendarId) {
+        try {
+            await ensureValidToken(familyMember);
+            const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+            await calendar.events.delete({
+                calendarId: event.googleCalendarId,
+                eventId: event.googleEventId,
+            });
+            console.log(`[Google Calendar] Event deleted: ${event.googleEventId}`);
+        } catch (error) {
+            console.error('Google Calendar delete error:', error);
+            // Valid to ignore 404/410 (already deleted)
+        }
+    }
+
+    // Delete from DB
+    await Event.findByIdAndDelete(eventId);
+
+    return { success: true };
 };
