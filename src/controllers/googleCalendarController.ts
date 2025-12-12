@@ -432,6 +432,7 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
 
         // Map hex color to Google Calendar color ID
         const COLOR_MAP: { [key: string]: string } = {
+            // Tailwind Colors (Legacy/Web)
             '#EF4444': '11', // Red
             '#F97316': '6',  // Orange
             '#F59E0B': '5',  // Amber
@@ -442,14 +443,25 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
             '#8B5CF6': '3',  // Violet
             '#EC4899': '4',  // Pink
             '#6B7280': '8',  // Gray
-        };
-        const googleColorId = COLOR_MAP[eventColor] || '9'; // Default to blue
 
-        const googleEvent = {
+            // Mobile App PROFILE_COLORS Matches
+            '#4285F4': '9',  // Blueberry
+            '#1967D2': '9',  // Celtic Blue -> Blue
+            '#FBBC04': '5',  // Selective Yellow -> Yellow
+            '#F72A25': '11', // Pigment Red -> Red
+            '#34A853': '10', // Sea Green -> Green
+            '#188038': '10', // Dark Spring Green -> Green
+            '#FF8C00': '6',  // Tangerine
+            '#8E24AA': '3',  // Grape
+            '#E67C73': '4',  // Flamingo
+            '#039BE5': '7',  // Peacock
+        };
+        const googleColorId = COLOR_MAP[eventColor.toUpperCase()] || undefined; // If no match, undefined = inherit calendar color
+
+        const googleEvent: any = {
             summary: googleCalendarTitle, // Title WITH attendee names
             location: location,
             description: notes,
-            colorId: googleColorId, // Apply color
             start: allDay
                 ? { date: new Date(startDate).toISOString().split('T')[0] }
                 : { dateTime: new Date(startDate).toISOString() },
@@ -457,6 +469,11 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
                 ? { date: new Date(endDate).toISOString().split('T')[0] }
                 : { dateTime: new Date(endDate).toISOString() },
         };
+
+        // Only add colorId if we found a valid mapping
+        if (googleColorId) {
+            googleEvent.colorId = googleColorId;
+        }
 
         const response = await calendar.events.insert({
             calendarId: targetCalendarId,

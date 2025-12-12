@@ -364,6 +364,9 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
             if (householdName && !inviteCode) {
                 household.householdName = householdName;
             }
+            if (familyColor) {
+                household.familyColor = familyColor;
+            }
 
             const memberProfile = household.memberProfiles.find(
                 (p) => p.familyMemberId.toString() === userId
