@@ -12,7 +12,7 @@ import Household from '../models/Household';
 import AppError from '../utils/AppError';
 import { ensureValidToken, exchangeCodeForTokens as exchangeTokens, getOAuth2Client } from '../services/googleAuthService';
 import { performCalendarSync } from '../services/googleCalendarSyncService';
-import { createEvent, updateEvent } from '../services/googleCalendarEventService';
+import { createEvent, updateEvent, deleteEvent } from '../services/googleCalendarEventService';
 
 const oauth2Client = getOAuth2Client();
 
@@ -260,9 +260,7 @@ export const deleteGoogleEvent = asyncHandler(async (req: any, res: Response, ne
     const { id } = req.params;
 
     try {
-        await import('../services/googleCalendarEventService').then(s =>
-            s.deleteEvent(userId, householdId.toString(), id)
-        );
+        await deleteEvent(userId, householdId.toString(), id);
 
         console.log(`[DB] Event deleted: ${id}`);
 

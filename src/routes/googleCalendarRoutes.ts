@@ -6,6 +6,7 @@ import {
     listCalendars,
     createCalendarEvent,
     updateGoogleEvent,
+    deleteGoogleEvent,
 } from '../controllers/googleCalendarController';
 
 const router = express.Router();
@@ -23,10 +24,7 @@ router.post('/events', protect, createCalendarEvent);
 router.patch('/events/:id', protect, updateGoogleEvent);
 
 // Delete calendar event
-router.delete('/events/:id', protect, (req, res, next) => {
-    // Dynamic import to avoid circular dependency issues if any, or just direct import
-    import('../controllers/googleCalendarController').then(c => c.deleteGoogleEvent(req, res, next));
-});
+router.delete('/events/:id', protect, deleteGoogleEvent);
 
 // List user's calendars
 router.get('/list', protect, listCalendars);
