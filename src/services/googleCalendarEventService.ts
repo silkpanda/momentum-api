@@ -220,8 +220,36 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
             const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
             // Determine the current calendar ID (fallback to primary/selected if missing in DB)
-            const currentCalendarId = event.googleCalendarId || familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
+            let currentCalendarId = event.googleCalendarId || familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
             let calendarIdToUpdate = currentCalendarId;
+
+            // HELPER: Recover lost event location
+            const recoverEventLocation = async (missingEventId: string): Promise<string | null> => {
+                console.log(`[Recovery] Attempting to find event ${missingEventId} in all user calendars...`);
+                try {
+                    const calendarList = await calendar.calendarList.list({ minAccessRole: 'writer' });
+                    const calendars = calendarList.data.items || [];
+
+                    for (const cal of calendars) {
+                        try {
+                            const foundEvent = await calendar.events.get({
+                                calendarId: cal.id!,
+                                eventId: missingEventId,
+                            });
+                            if (foundEvent.data) {
+                                console.log(`[Recovery] FOUND event in calendar: ${cal.id}`);
+                                return cal.id || null;
+                            }
+                        } catch (err) {
+                            // Not in this calendar, continue
+                        }
+                    }
+                } catch (listErr) {
+                    console.error('[Recovery] Failed to list calendars:', listErr);
+                }
+                console.log('[Recovery] Event not found in any calendar.');
+                return null;
+            };
 
             // Check if we need to MOVE the event to a different calendar
             if (currentCalendarId && targetCalendarId && currentCalendarId !== targetCalendarId) {
@@ -233,23 +261,44 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
                         destination: targetCalendarId,
                     });
 
-                    // Update the event ID if it changed
-                    if (moveResponse.data.id) {
-                        event.googleEventId = moveResponse.data.id;
-                    }
-
-                    // CRITICAL: Only switch the update target if the move succeeded
-                    calendarIdToUpdate = targetCalendarId;
+                    if (moveResponse.data.id) event.googleEventId = moveResponse.data.id;
+                    calendarIdToUpdate = targetCalendarId; // Move succeeded, update target
                     console.log('✅ Event moved successfully');
                 } catch (moveError: any) {
                     console.error('❌ Failed to move event:', moveError.message);
-                    console.warn('⚠️ Falling back to updating event on original calendar to ensure data consistency.');
-                    // calendarIdToUpdate remains currentCalendarId, so we patch the old calendar
+
+                    // If 404, the event might not be on 'currentCalendarId'. Try to find it.
+                    if (moveError.code === 404 || (moveError.errors && moveError.errors[0]?.reason === 'notFound')) {
+                        const realCalendarId = await recoverEventLocation(event.googleEventId);
+                        if (realCalendarId && realCalendarId !== currentCalendarId) {
+                            // Retry move from real location
+                            console.log(`[Retry Move] Retrying move from real location: ${realCalendarId} -> ${targetCalendarId}`);
+                            try {
+                                const retryMoveResponse = await calendar.events.move({
+                                    calendarId: realCalendarId,
+                                    eventId: event.googleEventId,
+                                    destination: targetCalendarId,
+                                });
+                                if (retryMoveResponse.data.id) event.googleEventId = retryMoveResponse.data.id;
+                                calendarIdToUpdate = targetCalendarId;
+                                event.googleCalendarId = targetCalendarId; // Correct the DB immediately
+                                await event.save();
+                                console.log('✅ Retry Move successful');
+                            } catch (retryErr) {
+                                console.error('Retry move failed:', retryErr);
+                                // Fallback to updating original (found) location
+                                calendarIdToUpdate = realCalendarId;
+                                event.googleCalendarId = realCalendarId; // At least correct the location in DB
+                                await event.save();
+                            }
+                        } else {
+                            console.warn('⚠️ Could not recover event location. Fallback to original intent (risky).');
+                        }
+                    } else {
+                        console.warn('⚠️ Falling back to updating event on original calendar to ensure data consistency.');
+                    }
                 }
             } else {
-                // No move needed, but ensure we are targeting the correct calendar (e.g. if we just assumed current was target)
-                // If we didn't enter the if-block, it means IDs are same or one is missing. 
-                // If currentCalendarId is known, use it. If not, we might be in trouble, but let's default to target.
                 if (currentCalendarId === targetCalendarId) {
                     calendarIdToUpdate = targetCalendarId;
                 }
@@ -280,17 +329,37 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
             if (googleColorId) googleEvent.colorId = googleColorId;
 
             console.log(`[Patching Event] ID: ${event.googleEventId} on Calendar: ${calendarIdToUpdate}`);
-            const response = await calendar.events.patch({
-                calendarId: calendarIdToUpdate,
-                eventId: event.googleEventId,
-                requestBody: googleEvent,
-            });
-            googleResponse = response.data;
 
-            // If we successfully patched, and we INTENDED to move but failed, we still save the DB state.
-            // But if we successfully MOVED, we must update the DB's googleCalendarId
-            if (calendarIdToUpdate === targetCalendarId) {
-                event.googleCalendarId = targetCalendarId;
+            try {
+                const response = await calendar.events.patch({
+                    calendarId: calendarIdToUpdate,
+                    eventId: event.googleEventId,
+                    requestBody: googleEvent,
+                });
+                googleResponse = response.data;
+            } catch (patchError: any) {
+                console.error('Patch failed:', patchError.message);
+                if (patchError.code === 404 || (patchError.errors && patchError.errors[0]?.reason === 'notFound')) {
+                    // One last try: Did we fail because we're looking at the wrong calendar?
+                    const realCalendarId = await recoverEventLocation(event.googleEventId);
+                    if (realCalendarId && realCalendarId !== calendarIdToUpdate) {
+                        console.log(`[Retry Patch] Retrying patch on real calendar: ${realCalendarId}`);
+                        const retryResponse = await calendar.events.patch({
+                            calendarId: realCalendarId,
+                            eventId: event.googleEventId,
+                            requestBody: googleEvent,
+                        });
+                        googleResponse = retryResponse.data;
+                        calendarIdToUpdate = realCalendarId; // For DB save below
+                    }
+                } else {
+                    throw patchError;
+                }
+            }
+
+            // Final DB Save of location
+            if (calendarIdToUpdate) {
+                event.googleCalendarId = calendarIdToUpdate;
                 await event.save();
             }
 
