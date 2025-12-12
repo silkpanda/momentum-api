@@ -250,6 +250,9 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
         googleCalendarTitle = `${title || event.title} (${attendeeNames})`;
     }
 
+    // Capture Original Location BEFORE updates
+    const originalGoogleCalendarId = event.googleCalendarId || familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
+
     // DB Update
     if (title !== undefined) event.title = title;
     if (startDate !== undefined) event.startDate = new Date(startDate);
@@ -273,8 +276,8 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
             await ensureValidToken(familyMember);
             const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-            // Determine the current calendar ID (fallback to primary/selected if missing in DB)
-            let currentCalendarId = event.googleCalendarId || familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
+            // Determine the current calendar ID from the SNAPSHOT taken before DB updates
+            let currentCalendarId = originalGoogleCalendarId;
             let calendarIdToUpdate = currentCalendarId;
 
             console.log('--- [Move Logic Diagnostic] ---');
