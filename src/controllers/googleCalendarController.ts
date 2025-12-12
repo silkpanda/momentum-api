@@ -566,6 +566,13 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
 
         console.log(`[Google Calendar] ✅ Event created! ID: ${response.data.id}, Link: ${response.data.htmlLink}`);
 
+        // Emit WebSocket event to notify all clients in the household
+        const io = req.app.get('io');
+        io.to(householdId.toString()).emit('event_updated', {
+            action: 'created',
+            eventId: (event as any)._id.toString()
+        });
+
         res.status(201).json({
             status: 'success',
             data: {
