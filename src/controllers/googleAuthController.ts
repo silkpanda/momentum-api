@@ -355,7 +355,7 @@ export const completeOnboarding = asyncHandler(async (req: Request, res: Respons
 
                 // --- ZOMBIE HOUSEHOLD CLEANUP ---
                 // If user came from a placeholder household (single member), delete it
-                if (currentContextHouseholdId && currentContextHouseholdId.toString() !== household._id.toString()) {
+                if (currentContextHouseholdId && currentContextHouseholdId.toString() !== (household as any)._id.toString()) {
                     try {
                         const oldHousehold = await Household.findById(currentContextHouseholdId);
                         if (oldHousehold && oldHousehold.memberProfiles.length <= 1) {
