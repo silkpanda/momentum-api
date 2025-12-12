@@ -603,6 +603,169 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
 });
 
 /**
+ * @desc    Update an existing Google Calendar event
+ * @route   PATCH /api/v1/calendar/google/events/:id
+ * @access  Protected
+ */
+export const updateGoogleEvent = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
+    const userId = req.user?._id;
+    const householdId = req.householdId;
+    const { id } = req.params;
+
+    const familyMember = await FamilyMember.findById(userId);
+    if (!familyMember) return next(new AppError('User not found', 404));
+
+    const { title, startDate, endDate, allDay, location, notes, attendees } = req.body;
+
+    // Find existing event
+    const event = await Event.findById(id);
+    if (!event) {
+        return next(new AppError('Event not found', 404));
+    }
+
+    if (event.householdId.toString() !== householdId) {
+        return next(new AppError('Unauthorized', 403));
+    }
+
+    // Fetch household
+    const household = await Household.findById(householdId);
+    if (!household) {
+        return next(new AppError('Household not found', 404));
+    }
+
+    // Determine new calendar routing and color based on updated attendees
+    let targetCalendarId: string;
+    let eventColor: string;
+    let googleCalendarTitle = title || event.title;
+    let calendarType: 'personal' | 'family' = 'personal';
+
+    const finalAttendees = attendees !== undefined ? attendees : event.attendees;
+
+    if (!finalAttendees || finalAttendees.length === 0) {
+        targetCalendarId = familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
+        const parentProfile = household.memberProfiles.find(
+            p => p.familyMemberId.toString() === userId.toString()
+        );
+        eventColor = parentProfile?.profileColor || '#3B82F6';
+    } else if (finalAttendees.length === 1) {
+        const attendeeMember = await FamilyMember.findById(finalAttendees[0]);
+        const attendeeProfile = household.memberProfiles.find(
+            p => p.familyMemberId.toString() === finalAttendees[0].toString()
+        );
+
+        if (!attendeeMember || !attendeeProfile) {
+            return next(new AppError('Attendee not found', 404));
+        }
+
+        targetCalendarId = attendeeMember.googleCalendar?.selectedCalendarId || familyMember.email;
+        eventColor = attendeeProfile.profileColor;
+        googleCalendarTitle = title || event.title;
+    } else {
+        calendarType = 'family';
+        targetCalendarId = household.familyCalendarId || familyMember.googleCalendar?.selectedCalendarId || familyMember.email;
+        eventColor = household.familyColor || '#8B5CF6';
+
+        const attendeeMembers = await FamilyMember.find({
+            _id: { $in: finalAttendees }
+        });
+        const attendeeNames = attendeeMembers
+            .map((m: any) => household.memberProfiles.find(p => p.familyMemberId.toString() === m._id.toString())?.displayName || m.firstName)
+            .join(', ');
+
+        googleCalendarTitle = `${title || event.title} (${attendeeNames})`;
+    }
+
+    // Update DB event
+    if (title !== undefined) event.title = title;
+    if (startDate !== undefined) event.startDate = new Date(startDate);
+    if (endDate !== undefined) event.endDate = new Date(endDate);
+    if (allDay !== undefined) event.allDay = allDay;
+    if (location !== undefined) event.location = location;
+    if (notes !== undefined) event.description = notes;
+    if (attendees !== undefined) event.attendees = attendees;
+    event.calendarType = calendarType;
+    event.color = eventColor;
+
+    await event.save();
+
+    console.log(`[DB] Event updated: ${event._id}`);
+
+    // Update Google Calendar if event has googleEventId
+    if (event.googleEventId) {
+        try {
+            await ensureValidToken(familyMember);
+            const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+            // Map color
+            const COLOR_MAP: { [key: string]: string } = {
+                '#EF4444': '11', '#F97316': '6', '#F59E0B': '5', '#10B981': '10',
+                '#06B6D4': '7', '#3B82F6': '9', '#6366F1': '1', '#8B5CF6': '3',
+                '#EC4899': '4', '#6B7280': '8', '#7986CB': '1', '#33B679': '2',
+                '#8E24AA': '3', '#E67C73': '4', '#F6BF26': '5', '#F4511E': '6',
+                '#039BE5': '7', '#616161': '8', '#3F51B5': '9', '#0B8043': '10',
+                '#D50000': '11',
+            };
+            const googleColorId = COLOR_MAP[eventColor.toUpperCase()] || undefined;
+
+            const googleEvent: any = {
+                summary: googleCalendarTitle,
+                location: event.location,
+                description: event.description,
+                start: event.allDay
+                    ? { date: event.startDate.toISOString().split('T')[0] }
+                    : { dateTime: event.startDate.toISOString() },
+                end: event.allDay
+                    ? { date: event.endDate.toISOString().split('T')[0] }
+                    : { dateTime: event.endDate.toISOString() },
+            };
+
+            if (googleColorId) {
+                googleEvent.colorId = googleColorId;
+            }
+
+            // Update the event on Google Calendar
+            await calendar.events.patch({
+                calendarId: targetCalendarId,
+                eventId: event.googleEventId,
+                requestBody: googleEvent,
+            });
+
+            console.log(`[Google Calendar] Event updated: ${event.googleEventId}`);
+
+            res.status(200).json({
+                status: 'success',
+                data: {
+                    id: event._id,
+                    title: event.title,
+                    color: eventColor,
+                },
+            });
+        } catch (error: any) {
+            console.error('Google Calendar update error:', error);
+            res.status(200).json({
+                status: 'success',
+                message: 'Event updated locally. Google Calendar sync will retry.',
+                data: {
+                    id: event._id,
+                    title: event.title,
+                    color: eventColor,
+                },
+            });
+        }
+    } else {
+        // No Google event ID, just return DB update success
+        res.status(200).json({
+            status: 'success',
+            data: {
+                id: event._id,
+                title: event.title,
+                color: eventColor,
+            },
+        });
+    }
+});
+
+/**
  * Helper to sync fetched Google Events to valid MongoDB Event documents.
  * This ensures "Persistence" so events load instantly offline or on next reload.
  */
