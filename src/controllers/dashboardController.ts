@@ -48,8 +48,8 @@ export const getDashboardData = async (req: AuthenticatedRequest, res: Response,
             id: household._id,
             name: household.householdName,
             members: household.memberProfiles?.map((p: any) => ({
-                id: p._id, // This is the Profile ID (Access Card ID)
-                userId: p.familyMemberId?._id || p.familyMemberId,
+                id: p._id.toString(), // This is the Profile ID (Access Card ID)
+                userId: (p.familyMemberId?._id || p.familyMemberId)?.toString(),
                 firstName: p.displayName || p.familyMemberId?.firstName || 'Unknown',
                 lastName: p.familyMemberId?.lastName || '',
                 profileColor: p.profileColor,
@@ -96,6 +96,7 @@ export const getDashboardData = async (req: AuthenticatedRequest, res: Response,
                 allDay: e.allDay,
                 startDate: e.startDate,
                 endDate: e.endDate,
+                attendees: (e.attendees || []).map((id: any) => id.toString())
             };
         });
 
