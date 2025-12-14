@@ -265,20 +265,31 @@ export const performCalendarSync = async (
         '9': '#3F51B5', '10': '#0B8043', '11': '#D50000',
     };
 
-    const mapGoogleEvent = (e: any) => ({
-        id: e.id,
-        title: e.summary || 'No Title',
-        summary: e.summary,
-        description: e.description,
-        location: e.location,
-        color: REVERSE_COLOR_MAP[e.colorId] || '#3B82F6', // Default Blue
-        start: e.start,
-        end: e.end,
-        allDay: !e.start.dateTime,
-        // _momentumColor is what we'd conceptually use if we were sending normalized colors, 
-        // but currently the frontend might look at 'color' or 'colorId'. 
-        // We'll stick to the existing controller format for now.
+    // Map emails to Member IDs for attendee resolution
+    const memberEmailMap = new Map<string, string>();
+    allMembers.forEach(m => {
+        memberEmailMap.set(m.email.toLowerCase(), m._id.toString());
     });
+
+    const mapGoogleEvent = (e: any) => {
+        // Map Google Attendees (email) -> Member IDs
+        const attendeeIds = e.attendees?.map((a: any) =>
+            memberEmailMap.get(a.email?.toLowerCase())
+        ).filter(Boolean) || [];
+
+        return {
+            id: e.id,
+            title: e.summary || 'No Title',
+            summary: e.summary,
+            description: e.description,
+            location: e.location,
+            color: REVERSE_COLOR_MAP[e.colorId] || '#3B82F6', // Default Blue
+            start: e.start,
+            end: e.end,
+            allDay: !e.start.dateTime,
+            attendees: attendeeIds,
+        };
+    };
 
     const mappedGoogleEvents = googleEvents.map(mapGoogleEvent);
 
@@ -295,7 +306,8 @@ export const performCalendarSync = async (
         end: e.allDay
             ? { date: e.endDate.toISOString().split('T')[0] }
             : { dateTime: e.endDate.toISOString() },
-        allDay: e.allDay
+        allDay: e.allDay,
+        attendees: e.attendees?.map((id: any) => id.toString()) || []
     }));
 
     const allEvents = [...mappedGoogleEvents, ...formattedUnsyncedEvents];
