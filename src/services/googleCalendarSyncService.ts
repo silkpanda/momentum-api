@@ -26,10 +26,30 @@ export const syncGoogleEventsToDb = async (
         const googleEventIdsSeen = new Set<string>();
         const bulkOps: any[] = [];
 
+        // Pre-fetch existing events to check for recent local modifications (Race Condition Protection)
+        const googleIds = googleEvents.map(e => e.id).filter(Boolean);
+        const existingEvents = await Event.find({
+            householdId,
+            googleEventId: { $in: googleIds }
+        }).select('googleEventId updatedAt');
+
+        const recentUpdateThreshold = Date.now() - 5000; // 5 seconds
+        const existingEventMap = new Map<string, any>();
+        existingEvents.forEach(e => existingEventMap.set(e.googleEventId!, e));
+
         // 1. Prepare Bulk Upsert Operations
         for (const ge of googleEvents) {
             if (!ge.id) continue;
             googleEventIdsSeen.add(ge.id);
+
+            // RACE CONDITION CHECK:
+            // If the event was updated locally in the last 5 seconds, we ignore the incoming Google data
+            // because it might be stale (e.g., event moved but Google API hasn't propagated read yet).
+            const existing = existingEventMap.get(ge.id);
+            if (existing && existing.updatedAt && existing.updatedAt.getTime() > recentUpdateThreshold) {
+                console.log(`[SyncEngine] 🛡️ Protecting recently updated event: "${ge.summary}" (Local: ${existing.updatedAt.toISOString()})`);
+                continue;
+            }
 
             // Determine standardized color
             let eventColor = '#3B82F6'; // Default Blue
