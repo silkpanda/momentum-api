@@ -12,7 +12,13 @@
     "build": "rimraf dist && tsc",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "format": "prettier --write \"{src,test}/**/*.ts\"",
-    "test": "jest"
+    "test": "jest",
+    "db:check": "tsx scripts/check-database.ts",
+    "db:clear": "tsx scripts/clear-database.ts",
+    "db:clean-links": "tsx scripts/cleanup-orphaned-links.ts",
+    "pin:check": "tsx scripts/check-pin-data.ts",
+    "pin:debug": "tsx scripts/debug-pin.ts",
+    "scripts:list": "ls scripts"
   },
   "keywords": [
     "express",

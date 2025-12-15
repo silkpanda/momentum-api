@@ -243,3 +243,121 @@ export async function createGoogleCalendarEvent(
         googleEventId: response.data.id!,
     };
 }
+
+/**
+ * Update an event in Google Calendar
+ */
+export async function updateGoogleCalendarEvent(
+    accessToken: string,
+    calendarId: string,
+    googleEventId: string,
+    eventData: {
+        title: string;
+        description?: string;
+        location?: string;
+        startDate: Date;
+        endDate: Date;
+        allDay: boolean;
+        colorId?: string;
+        recurrence?: string[]; // RRULE format
+        reminderMinutes?: number;
+    },
+    refreshToken?: string
+): Promise<void> {
+    const oauth2Client = new OAuth2Client(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken
+    });
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    // Build event object (similar to create)
+    const event: any = {
+        summary: eventData.title,
+        description: eventData.description,
+        location: eventData.location,
+        colorId: eventData.colorId,
+    };
+
+    // Set start and end times
+    if (eventData.allDay) {
+        event.start = {
+            date: eventData.startDate.toISOString().split('T')[0],
+            timeZone: 'America/Chicago',
+        };
+        event.end = {
+            date: eventData.endDate.toISOString().split('T')[0],
+            timeZone: 'America/Chicago',
+        };
+    } else {
+        event.start = {
+            dateTime: eventData.startDate.toISOString(),
+            timeZone: 'America/Chicago',
+        };
+        event.end = {
+            dateTime: eventData.endDate.toISOString(),
+            timeZone: 'America/Chicago',
+        };
+    }
+
+    // Add recurrence if specified
+    if (eventData.recurrence && eventData.recurrence.length > 0) {
+        event.recurrence = eventData.recurrence;
+    }
+
+    // Add reminder if specified
+    if (eventData.reminderMinutes !== undefined) {
+        event.reminders = {
+            useDefault: false,
+            overrides: [
+                { method: 'popup', minutes: eventData.reminderMinutes },
+            ],
+        };
+    }
+
+    try {
+        await calendar.events.patch({
+            calendarId,
+            eventId: googleEventId,
+            requestBody: event,
+        });
+    } catch (error) {
+        console.error('Error updating Google Calendar event:', error);
+        throw error;
+    }
+}
+
+/**
+ * Delete an event from Google Calendar
+ */
+export async function deleteGoogleCalendarEvent(
+    accessToken: string,
+    calendarId: string,
+    googleEventId: string,
+    refreshToken?: string
+): Promise<void> {
+    const oauth2Client = new OAuth2Client(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET
+    );
+    oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: refreshToken
+    });
+
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+
+    try {
+        await calendar.events.delete({
+            calendarId,
+            eventId: googleEventId,
+        });
+    } catch (error) {
+        console.error('Error deleting Google Calendar event:', error);
+        throw error;
+    }
+}
