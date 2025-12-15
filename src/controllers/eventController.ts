@@ -8,7 +8,11 @@ import FamilyMember from '../models/FamilyMember';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import AppError from '../utils/AppError';
 import { io } from '../server';
-import { createGoogleCalendarEvent } from '../services/googleCalendarService';
+import {
+    createGoogleCalendarEvent,
+    updateGoogleCalendarEvent,
+    deleteGoogleCalendarEvent,
+} from '../services/googleCalendarService';
 
 // Color mapping helper
 const COLOR_MAP: { [key: string]: string } = {
@@ -282,7 +286,7 @@ export const updateEvent = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
         const householdId = req.householdId;
-        const userId = req.user?._id;
+        const userId = req.user?._id as Types.ObjectId;
 
         const event = await Event.findById(id);
 
@@ -356,7 +360,94 @@ export const updateEvent = asyncHandler(
 
         await event.save();
 
-        // TODO: Sync changes to Google Calendar
+        // Sync changes to Google Calendar
+        if (event.googleEventId) {
+            try {
+                let calendarIdToUse: string | null = null;
+                let accessToken: string | undefined;
+                let refreshToken: string | undefined;
+                let colorId: string | undefined;
+
+                // We assume the type hasn't changed for this simple sync, 
+                // or if it has, we are just updating the event in the *original* calendar 
+                // (moving calendars is out of scope for this MVP fix)
+                const currentCalendarType = event.calendarType;
+
+                const household = await Household.findById(householdId);
+
+                if (currentCalendarType === 'personal') {
+                    // Sync to user's personal calendar
+                    // We need the tokens of the user who owns the event (createdBy)
+                    // Or the current user if they are the owner. 
+                    // To be safe, let's use the current user's tokens if they match the creator,
+                    // otherwise we might not have permission if we are masquerading (not possible yet).
+
+                    const user = await FamilyMember.findById(userId).select('+googleCalendar');
+                    if (user?.googleCalendar?.selectedCalendarId && user.googleCalendar.accessToken) {
+                        calendarIdToUse = user.googleCalendar.selectedCalendarId;
+                        accessToken = user.googleCalendar.accessToken;
+                        refreshToken = user.googleCalendar.refreshToken;
+
+                        // Get user's profile color
+                        if (household) {
+                            const memberProfile = household.memberProfiles.find(
+                                (p) => p.familyMemberId.toString() === userId.toString()
+                            );
+                            if (memberProfile?.profileColor) {
+                                colorId = getClosestGoogleColor(memberProfile.profileColor);
+                            }
+                        }
+                    }
+                } else {
+                    // Family Calendar
+                    if (household && household.familyCalendarId) {
+                        calendarIdToUse = household.familyCalendarId;
+                        if (household.familyColor) {
+                            colorId = getClosestGoogleColor(household.familyColor);
+                        }
+
+                        // Use current user's tokens
+                        const user = await FamilyMember.findById(userId).select('+googleCalendar');
+                        if (user?.googleCalendar?.accessToken) {
+                            accessToken = user.googleCalendar.accessToken;
+                            refreshToken = user.googleCalendar.refreshToken;
+                        }
+                    }
+                }
+
+                if (calendarIdToUse && accessToken) {
+                    // Check if recurrence needs update
+                    let recurrenceRules: string[] | undefined;
+                    if (event.isRecurring && event.recurrenceType) {
+                        const freq = event.recurrenceType.toUpperCase();
+                        recurrenceRules = [`RRULE:FREQ=${freq}`];
+                    }
+
+                    await updateGoogleCalendarEvent(
+                        accessToken,
+                        calendarIdToUse,
+                        event.googleEventId,
+                        {
+                            title: event.title,
+                            description: event.videoLink ? `${event.description || ''}\n\nVideo: ${event.videoLink}` : event.description,
+                            location: event.location,
+                            startDate: event.startDate,
+                            endDate: event.endDate,
+                            allDay: event.allDay,
+                            colorId,
+                            recurrence: recurrenceRules,
+                            reminderMinutes: event.reminderMinutes,
+                        },
+                        refreshToken
+                    );
+                    console.log(`✅ Event updated in Google Calendar: ${event.googleEventId}`);
+                }
+
+            } catch (error) {
+                console.error('Failed to sync update to Google Calendar:', error);
+                // We do not throw here to allow local update to succeed
+            }
+        }
 
         // Emit real-time update
         io.to(householdId.toString()).emit('event_updated', event);
@@ -389,10 +480,51 @@ export const deleteEvent = asyncHandler(
             throw new AppError('Unauthorized', 403);
         }
 
-        // TODO: Delete from Google Calendar
-        // if (event.googleEventId) {
-        //   await deleteGoogleCalendarEvent(event);
-        // }
+        // Delete from Google Calendar
+        if (event.googleEventId) {
+            try {
+                let calendarIdToUse: string | null = null;
+                let accessToken: string | undefined;
+                let refreshToken: string | undefined;
+
+                const household = await Household.findById(householdId);
+                const currentCalendarType = event.calendarType;
+                const userId = req.user?._id as Types.ObjectId; // Current user
+
+                if (currentCalendarType === 'personal') {
+                    const user = await FamilyMember.findById(userId).select('+googleCalendar');
+                    if (user?.googleCalendar?.selectedCalendarId && user.googleCalendar.accessToken) {
+                        calendarIdToUse = user.googleCalendar.selectedCalendarId;
+                        accessToken = user.googleCalendar.accessToken;
+                        refreshToken = user.googleCalendar.refreshToken;
+                    }
+                } else {
+                    // Family
+                    if (household && household.familyCalendarId) {
+                        calendarIdToUse = household.familyCalendarId;
+                        const user = await FamilyMember.findById(userId).select('+googleCalendar');
+                        if (user?.googleCalendar?.accessToken) {
+                            accessToken = user.googleCalendar.accessToken;
+                            refreshToken = user.googleCalendar.refreshToken;
+                        }
+                    }
+                }
+
+                if (calendarIdToUse && accessToken) {
+                    await deleteGoogleCalendarEvent(
+                        accessToken,
+                        calendarIdToUse,
+                        event.googleEventId,
+                        refreshToken
+                    );
+                    console.log(`✅ Event deleted from Google Calendar: ${event.googleEventId}`);
+                }
+
+            } catch (error) {
+                console.error('Failed to deletet event from Google Calendar:', error);
+                // Continue to delete locally
+            }
+        }
 
         await Event.findByIdAndDelete(id);
 
