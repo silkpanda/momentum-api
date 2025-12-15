@@ -3,11 +3,11 @@
 // Google Calendar Sync Engine
 // =========================================================
 import { google } from 'googleapis';
+import { Types } from 'mongoose';
 import Event from '../models/Event';
 import Household from '../models/Household';
 import FamilyMember from '../models/FamilyMember';
 import { ensureValidToken, getOAuth2Client } from './googleAuthService';
-import { Types } from 'mongoose';
 
 const oauth2Client = getOAuth2Client();
 

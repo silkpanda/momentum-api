@@ -11,13 +11,13 @@ import WeeklyMealPlan from '../models/WeeklyMealPlan';
 // --- RECIPES ---
 
 export const getRecipes = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const {householdId} = req;
+    const { householdId } = req;
     const recipes = await Recipe.find({ householdId }).sort({ name: 1 });
     res.status(200).json({ status: 'success', data: { recipes } });
 });
 
 export const createRecipe = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const {householdId} = req;
+    const { householdId } = req;
 
     if (!householdId) {
         throw new AppError('Household ID not found in request. Please ensure you are authenticated.', 401);
@@ -48,13 +48,13 @@ export const deleteRecipe = asyncHandler(async (req: AuthenticatedRequest, res: 
 // --- RESTAURANTS ---
 
 export const getRestaurants = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const {householdId} = req;
+    const { householdId } = req;
     const restaurants = await Restaurant.find({ householdId }).sort({ name: 1 });
     res.status(200).json({ status: 'success', data: { restaurants } });
 });
 
 export const createRestaurant = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const {householdId} = req;
+    const { householdId } = req;
 
     if (!householdId) {
         throw new AppError('Household ID not found in request. Please ensure you are authenticated.', 401);
@@ -88,7 +88,7 @@ export const deleteRestaurant = asyncHandler(async (req: AuthenticatedRequest, r
 // --- MEAL PLANS ---
 
 export const getMealPlans = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const {householdId} = req;
+    const { householdId } = req;
 
     // 1. Fetch all Weekly Plans for this household
     const weeklyPlans = await WeeklyMealPlan.find({ householdId }).sort({ startDate: -1 });
@@ -106,7 +106,7 @@ export const getMealPlans = asyncHandler(async (req: AuthenticatedRequest, res: 
 });
 
 export const createMealPlan = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const {householdId} = req;
+    const { householdId } = req;
     const { startDate, endDate } = req.body;
 
     // Create the Weekly Container
@@ -116,11 +116,20 @@ export const createMealPlan = asyncHandler(async (req: AuthenticatedRequest, res
         endDate
     });
 
+    const io = req.app.get('io');
+    if (io && householdId) {
+        io.to(householdId.toString()).emit('meal_plan_updated', {
+            type: 'create',
+            mealPlan: weeklyPlan,
+            householdId
+        });
+    }
+
     res.status(201).json({ status: 'success', data: { mealPlan: { ...weeklyPlan.toObject(), meals: [] } } });
 });
 
 export const addMealToPlan = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const {householdId} = req;
+    const { householdId } = req;
     const { planId } = req.params;
 
     const weeklyPlan = await WeeklyMealPlan.findOne({ _id: planId, householdId });
@@ -134,6 +143,16 @@ export const addMealToPlan = asyncHandler(async (req: AuthenticatedRequest, res:
 
     await meal.populate('itemId');
 
+    const io = req.app.get('io');
+    if (io && householdId) {
+        io.to(householdId.toString()).emit('meal_plan_updated', {
+            type: 'update',
+            mealPlanId: planId,
+            meal,
+            householdId
+        });
+    }
+
     res.status(201).json({ status: 'success', data: { meal } });
 });
 
@@ -143,6 +162,16 @@ export const removeMealFromPlan = asyncHandler(async (req: AuthenticatedRequest,
     const meal = await MealPlan.findOneAndDelete({ _id: mealId, householdId: req.householdId, weeklyMealPlanId: planId });
 
     if (!meal) throw new AppError('Meal not found', 404);
+
+    const io = req.app.get('io');
+    if (io && req.householdId) {
+        io.to(req.householdId.toString()).emit('meal_plan_updated', {
+            type: 'delete', // Or update, since it's removing a sub-item
+            mealPlanId: planId,
+            mealId,
+            householdId: req.householdId
+        });
+    }
 
     res.status(204).json({ status: 'success', data: null });
 });
@@ -158,11 +187,20 @@ export const deleteMealPlan = asyncHandler(async (req: AuthenticatedRequest, res
     // Delete all associated meals
     await MealPlan.deleteMany({ weeklyMealPlanId: id });
 
+    const io = req.app.get('io');
+    if (io && req.householdId) {
+        io.to(req.householdId.toString()).emit('meal_plan_updated', {
+            type: 'delete',
+            mealPlanId: id,
+            householdId: req.householdId
+        });
+    }
+
     res.status(204).json({ status: 'success', data: null });
 });
 
 export const getUnratedMeals = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-    const {householdId} = req;
+    const { householdId } = req;
 
     // Find meals from the past that haven't been rated
     const unratedMeals = await MealPlan.find({
@@ -192,6 +230,15 @@ export const rateMeal = asyncHandler(async (req: AuthenticatedRequest, res: Resp
     );
 
     if (!meal) throw new AppError('Meal not found', 404);
+
+    const io = req.app.get('io');
+    if (io && req.householdId) {
+        io.to(req.householdId.toString()).emit('meal_plan_updated', {
+            type: 'update',
+            meal,
+            householdId: req.householdId
+        });
+    }
 
     res.status(200).json({ status: 'success', data: { meal } });
 });

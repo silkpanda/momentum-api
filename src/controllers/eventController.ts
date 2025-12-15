@@ -55,7 +55,7 @@ export const createEvent = asyncHandler(
         } = req.body;
 
         const userId = req.user?._id as Types.ObjectId;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         if (!userId || !householdId) {
             throw new AppError('Authentication error', 401);
@@ -208,7 +208,7 @@ export const createEvent = asyncHandler(
  */
 export const getEvents = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         if (!householdId) {
             throw new AppError('Household context not found', 401);
@@ -255,7 +255,7 @@ export const getEvents = asyncHandler(
 export const getEvent = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const event = await Event.findById(id)
             .populate('attendees', 'firstName profileColor')
@@ -285,7 +285,7 @@ export const getEvent = asyncHandler(
 export const updateEvent = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
         const userId = req.user?._id as Types.ObjectId;
 
         const event = await Event.findById(id);
@@ -467,7 +467,7 @@ export const updateEvent = asyncHandler(
 export const deleteEvent = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         const event = await Event.findById(id);
 

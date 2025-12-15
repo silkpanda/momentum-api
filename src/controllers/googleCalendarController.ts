@@ -83,7 +83,7 @@ export const listCalendars = asyncHandler(async (req: any, res: Response, next: 
  */
 export const getCalendarEvents = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
     const userId = req.user?._id;
-    const householdId = req.householdId;
+    const {householdId} = req;
 
     const familyMember = await FamilyMember.findById(userId);
     if (!familyMember) return next(new AppError('User not found', 404));
@@ -99,7 +99,7 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
         res.status(200).json({
             status: 'success',
             data: {
-                events: events,
+                events,
             },
         });
     } catch (error: any) {
@@ -137,7 +137,7 @@ export const getCalendarEvents = asyncHandler(async (req: any, res: Response, ne
  */
 export const createCalendarEvent = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
     const userId = req.user?._id;
-    const householdId = req.householdId;
+    const {householdId} = req;
 
     if (!req.body.title || !req.body.startDate || !req.body.endDate) {
         return next(new AppError('Missing required fields', 400));
@@ -202,7 +202,7 @@ export const createCalendarEvent = asyncHandler(async (req: any, res: Response, 
  */
 export const updateGoogleEvent = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
     const userId = req.user?._id;
-    const householdId = req.householdId;
+    const {householdId} = req;
     const { id } = req.params;
 
     try {
@@ -256,7 +256,7 @@ export const updateGoogleEvent = asyncHandler(async (req: any, res: Response, ne
  */
 export const deleteGoogleEvent = asyncHandler(async (req: any, res: Response, next: NextFunction) => {
     const userId = req.user?._id;
-    const householdId = req.householdId;
+    const {householdId} = req;
     const { id } = req.params;
 
     try {

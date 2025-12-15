@@ -14,7 +14,7 @@ export const getDashboardData = async (req: AuthenticatedRequest, res: Response,
         }
 
         const userId = req.user.id;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         // Fetch data in parallel (including calendar events)
         // Load events for current month ± 1 month for smooth navigation
@@ -104,8 +104,8 @@ export const getDashboardData = async (req: AuthenticatedRequest, res: Response,
             status: 'success',
             data: {
                 household: transformedHousehold,
-                tasks: tasks,
-                storeItems: storeItems,
+                tasks,
+                storeItems,
                 events: transformedEvents
             }
         });
@@ -122,7 +122,7 @@ export const getFamilyData = async (req: AuthenticatedRequest, res: Response, ne
         }
 
         const userId = req.user.id;
-        const householdId = req.householdId;
+        const {householdId} = req;
 
         // Fetch data in parallel
         const [household, tasks, storeItems] = await Promise.all([
@@ -152,9 +152,9 @@ export const getFamilyData = async (req: AuthenticatedRequest, res: Response, ne
         res.status(200).json({
             status: 'success',
             data: {
-                memberProfiles: memberProfiles,
-                tasks: tasks,
-                storeItems: storeItems
+                memberProfiles,
+                tasks,
+                storeItems
             }
         });
 

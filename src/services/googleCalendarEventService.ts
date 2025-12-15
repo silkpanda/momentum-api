@@ -65,9 +65,9 @@ const ensureMemberCalendarLink = async (
             await member.save();
 
             return match.id;
-        } else {
+        } 
             console.log(`[Calendar Link] NO MATCH found for '${member.firstName}' or '${member.displayName}'`);
-        }
+        
     } catch (err) {
         console.error('[Calendar Link] Failed to scan calendars:', err);
     }
@@ -169,7 +169,7 @@ export const createEvent = async (userId: string, householdId: string, eventData
 
         const googleEvent: any = {
             summary: googleCalendarTitle,
-            location: location,
+            location,
             description: notes,
             start: allDay
                 ? { date: new Date(startDate).toISOString().split('T')[0] }
@@ -277,7 +277,7 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
             const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
             // Determine the current calendar ID from the SNAPSHOT taken before DB updates
-            let currentCalendarId = originalGoogleCalendarId;
+            const currentCalendarId = originalGoogleCalendarId;
             let calendarIdToUpdate = currentCalendarId;
 
             console.log('--- [Move Logic Diagnostic] ---');
@@ -435,11 +435,9 @@ export const updateEvent = async (userId: string, householdId: string, eventId: 
                         }
                     }
                 }
-            } else {
-                if (currentCalendarId === targetCalendarId) {
+            } else if (currentCalendarId === targetCalendarId) {
                     calendarIdToUpdate = targetCalendarId;
                 }
-            }
 
             const COLOR_MAP: { [key: string]: string } = {
                 '#EF4444': '11', '#F97316': '6', '#F59E0B': '5', '#10B981': '10',

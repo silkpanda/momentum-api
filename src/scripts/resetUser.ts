@@ -43,7 +43,7 @@ const resetUser = async () => {
             process.exit(0);
         }
 
-        const householdId = (user as any).householdId;
+        const {householdId} = (user as any);
         if (!householdId) {
             console.log('User has no household linked. Deleting user only...');
             await FamilyMember.findByIdAndDelete(user._id);
