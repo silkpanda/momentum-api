@@ -153,7 +153,7 @@ app.use(helmet()); // Set security HTTP headers
 // Limit requests from same API
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 3000, // Limit each IP to 3000 requests per windowMs (approx 3/sec avg)
   message: 'Too many requests from this IP, please try again in 15 minutes'
 });
 app.use('/api', limiter); // Apply to all API routes

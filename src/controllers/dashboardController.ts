@@ -14,7 +14,7 @@ export const getDashboardData = async (req: AuthenticatedRequest, res: Response,
         }
 
         const userId = req.user.id;
-        const {householdId} = req;
+        const { householdId } = req;
 
         // Fetch data in parallel (including calendar events)
         // Load events for current month ± 1 month for smooth navigation
@@ -28,7 +28,7 @@ export const getDashboardData = async (req: AuthenticatedRequest, res: Response,
 
         const [household, tasks, storeItems, events] = await Promise.all([
             Household.findById(householdId).populate('memberProfiles.familyMemberId'),
-            Task.find({ householdId }).populate('assignedTo.memberId').populate('createdBy'),
+            Task.find({ householdId }),
             StoreItem.find({ householdId }),
             Event.find({
                 householdId,
@@ -122,12 +122,12 @@ export const getFamilyData = async (req: AuthenticatedRequest, res: Response, ne
         }
 
         const userId = req.user.id;
-        const {householdId} = req;
+        const { householdId } = req;
 
         // Fetch data in parallel
         const [household, tasks, storeItems] = await Promise.all([
             Household.findById(householdId).populate('memberProfiles.familyMemberId'),
-            Task.find({ householdId }).populate('assignedTo.memberId').populate('createdBy'),
+            Task.find({ householdId }),
             StoreItem.find({ householdId })
         ]);
 
