@@ -6,6 +6,9 @@ import { ServerApiVersion } from 'mongodb';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import mongoSanitize from 'express-mongo-sanitize';
 
 // Import routers
 import authRouter from './routes/authRoutes';
@@ -144,8 +147,22 @@ io.on('connection', (socket: any) => {
 app.set('io', io);
 
 // Middleware
+// Security Middleware
+app.use(helmet()); // Set security HTTP headers
+
+// Limit requests from same API
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again in 15 minutes'
+});
+app.use('/api', limiter); // Apply to all API routes
+
+// Data Sanitization against NoSQL query injection
+app.use(mongoSanitize());
+
 app.use(cors(corsOptions)); // Allow cross-origin requests
-app.use(express.json()); // Parse JSON bodies
+app.use(express.json({ limit: '10kb' })); // Parse JSON bodies (limit body size)
 
 // --- DEBUG LOGGER ---
 // This will print exactly what the Core API receives from the BFF

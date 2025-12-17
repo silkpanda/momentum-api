@@ -40,7 +40,7 @@ const calculateNextReset = (frequency: 'daily' | 'weekly' | 'monthly') => {
 export const createQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { title, description, pointsValue, questType, maxClaims, recurrence, dueDate } = req.body;
-        const {householdId} = req;
+        const { householdId } = req;
 
         if (!title || !pointsValue) {
             throw new AppError('Title and points value are required.', 400);
@@ -71,7 +71,7 @@ export const createQuest = asyncHandler(
 
         // Real-time update
         const io = req.app.get('io');
-        io.emit('quest_updated', { type: 'create', quest });
+        io.to(householdId!.toString()).emit('quest_updated', { type: 'create', quest });
 
         res.status(201).json({
             status: 'success',
@@ -89,7 +89,7 @@ export const updateQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
         const { title, description, pointsValue, questType, maxClaims, recurrence, dueDate } = req.body;
-        const {householdId} = req;
+        const { householdId } = req;
 
         const quest = await Quest.findOne({ _id: id, householdId });
 
@@ -124,7 +124,7 @@ export const updateQuest = asyncHandler(
 
         // Real-time update
         const io = req.app.get('io');
-        io.emit('quest_updated', { type: 'update', quest });
+        io.to(householdId!.toString()).emit('quest_updated', { type: 'update', quest });
 
         res.status(200).json({
             status: 'success',
@@ -140,7 +140,7 @@ export const updateQuest = asyncHandler(
  */
 export const getAllQuests = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
-        const {householdId} = req;
+        const { householdId } = req;
 
         // Fetch all quests
         const quests = await Quest.find({ householdId }).sort({ createdAt: -1 });
@@ -173,7 +173,7 @@ export const getAllQuests = asyncHandler(
 export const deleteQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
-        const {householdId} = req;
+        const { householdId } = req;
 
         const quest = await Quest.findOneAndDelete({ _id: id, householdId });
 
@@ -182,7 +182,7 @@ export const deleteQuest = asyncHandler(
         }
 
         const io = req.app.get('io');
-        io.emit('quest_updated', { type: 'delete', questId: id });
+        io.to(householdId!.toString()).emit('quest_updated', { type: 'delete', questId: id });
 
         res.status(204).json({ status: 'success', data: null });
     }
@@ -197,7 +197,7 @@ export const claimQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
         const { memberId } = req.body;
-        const {householdId} = req;
+        const { householdId } = req;
 
         if (!memberId) {
             throw new AppError('Member ID is required to claim a quest.', 400);
@@ -216,7 +216,7 @@ export const claimQuest = asyncHandler(
         }
 
         const io = req.app.get('io');
-        io.emit('quest_updated', { type: 'update', quest });
+        io.to(householdId!.toString()).emit('quest_updated', { type: 'update', quest });
 
         res.status(200).json({
             status: 'success',
@@ -235,7 +235,7 @@ export const completeQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
         const { memberId } = req.body;
-        const {householdId} = req;
+        const { householdId } = req;
 
         if (!memberId) {
             throw new AppError('Member ID is required to complete a quest.', 400);
@@ -254,7 +254,7 @@ export const completeQuest = asyncHandler(
         }
 
         const io = req.app.get('io');
-        io.emit('quest_updated', { type: 'update', quest });
+        io.to(householdId!.toString()).emit('quest_updated', { type: 'update', quest });
 
         res.status(200).json({
             status: 'success',
@@ -273,7 +273,7 @@ export const approveQuest = asyncHandler(
     async (req: AuthenticatedRequest, res: Response) => {
         const { id } = req.params;
         const { memberId } = req.body;
-        const {householdId} = req;
+        const { householdId } = req;
 
         const quest = await Quest.findOne({ _id: id, householdId });
         if (!quest) throw new AppError('Quest not found.', 404);
@@ -296,9 +296,9 @@ export const approveQuest = asyncHandler(
         await household.save();
 
         const io = req.app.get('io');
-        io.emit('quest_updated', { type: 'update', quest });
+        io.to(householdId!.toString()).emit('quest_updated', { type: 'update', quest });
 
-        io.emit('member_points_updated', {
+        io.to(householdId!.toString()).emit('member_points_updated', {
             memberId,
             newTotal: memberProfile.pointsTotal
         });

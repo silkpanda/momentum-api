@@ -127,10 +127,13 @@ const FamilyMemberSchema = new Schema<IFamilyMember>(
     sharedData: SharedDataSchema,
     // Calendar integration
     googleCalendar: {
-      accessToken: String,
-      refreshToken: String,
-      expiryDate: Number,
-      selectedCalendarId: String,
+      type: {
+        accessToken: String,
+        refreshToken: String,
+        expiryDate: Number,
+        selectedCalendarId: String,
+      },
+      select: false, // Security: Do not return tokens by default
     },
     // Push tokens
     pushTokens: [{ type: String }],
@@ -167,7 +170,7 @@ FamilyMemberSchema.methods.comparePin = async function (candidatePin: string): P
   console.log('[comparePin] Candidate PIN (as string):', pinStr);
   console.log('[comparePin] Candidate PIN length:', pinStr.length);
   console.log('[comparePin] Stored PIN hash length:', this.pin?.length);
-  console.log('[comparePin] Stored PIN hash (masked):', this.pin ? `${this.pin.slice(0, 10)  }...` : 'none');
+  console.log('[comparePin] Stored PIN hash (masked):', this.pin ? `${this.pin.slice(0, 10)}...` : 'none');
 
   if (!this.pin) {
     const user = await model('FamilyMember').findById(this._id).select('+pin');

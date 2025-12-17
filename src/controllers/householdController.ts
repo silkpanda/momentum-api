@@ -237,7 +237,7 @@ export const updateHousehold = asyncHandler(
     await household.save();
 
     // Emit real-time update
-    io.emit('household_updated', { type: 'update', householdId: id, householdName });
+    io.to(id).emit('household_updated', { type: 'update', householdId: id, householdName });
 
     res.status(200).json({
       status: 'success',
@@ -384,7 +384,7 @@ export const addMemberToHousehold = asyncHandler(
     });
 
     // Emit real-time update
-    io.emit('household_updated', { type: 'member_add', householdId, member: finalHousehold.memberProfiles.find((p) => p.familyMemberId.equals(familyMemberId)) });
+    io.to(householdId).emit('household_updated', { type: 'member_add', householdId, member: finalHousehold.memberProfiles.find((p) => p.familyMemberId.equals(familyMemberId)) });
 
     // Handle Calendar Integration
     if (calendarOption && loggedInUserId) {
@@ -503,7 +503,7 @@ export const updateMemberProfile = asyncHandler(
     await household.save();
 
     // Emit real-time update
-    io.emit('household_updated', { type: 'member_update', householdId, memberProfile });
+    io.to(householdId).emit('household_updated', { type: 'member_update', householdId, memberProfile });
 
     res.status(200).json(household);
   },
@@ -625,7 +625,7 @@ export const removeMemberFromHousehold = asyncHandler(
     await household.save();
 
     // Emit real-time update
-    io.emit('household_updated', { type: 'member_remove', householdId, memberProfileId });
+    io.to(householdId).emit('household_updated', { type: 'member_remove', householdId, memberProfileId });
 
     res.status(200).json(household);
   },

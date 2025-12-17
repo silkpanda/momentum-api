@@ -1,7 +1,11 @@
 // MANDATORY: UPPER_SNAKE_CASE for Global Constants
 // Use the secret from environment variables if available, otherwise use a fallback.
 // This secret is used for signing and verifying JSON Web Tokens (JWT).
-export const JWT_SECRET: string = process.env.JWT_SECRET || 'YOUR_SUPER_SECURE_DEFAULT_SECRET';
+if (!process.env.JWT_SECRET) {
+    throw new Error('FATAL: JWT_SECRET environment variable is missing.');
+}
+
+export const JWT_SECRET: string = process.env.JWT_SECRET;
 
 // Time until the JWT token expires (e.g., 3 days)
 export const JWT_EXPIRES_IN: string = process.env.JWT_EXPIRES_IN || '3d';
