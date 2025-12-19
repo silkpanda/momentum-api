@@ -16,7 +16,7 @@ const handleResponse = (res: Response, status: number, message: string, data?: a
 /** Get all StoreItems for the authenticated user's household */
 export const getAllStoreItems = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const {householdId} = req;
+    const { householdId } = req;
     if (!householdId) {
       handleResponse(res, 400, 'Household context is missing from request.');
       return;
@@ -40,7 +40,7 @@ export const createStoreItem = async (req: AuthenticatedRequest, res: Response):
       handleResponse(res, 400, 'Missing mandatory fields: itemName and cost.');
       return;
     }
-    const {householdId} = req;
+    const { householdId } = req;
     if (!householdId) {
       handleResponse(res, 400, 'Household context is missing from request.');
       return;
@@ -55,7 +55,7 @@ export const createStoreItem = async (req: AuthenticatedRequest, res: Response):
       householdRefId: householdId,
     });
     const io = req.app.get('io');
-    io.to(householdId).emit('store_item_updated', { type: 'create', storeItem: newItem });
+    io.to(householdId.toString()).emit('store_item_updated', { type: 'create', storeItem: newItem });
     handleResponse(res, 201, 'Store item created successfully.', newItem);
   } catch (err: any) {
     handleResponse(res, 500, 'Failed to create store item.', { error: err.message });
@@ -66,7 +66,7 @@ export const createStoreItem = async (req: AuthenticatedRequest, res: Response):
 export const getStoreItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const itemId = req.params.id;
-    const {householdId} = req;
+    const { householdId } = req;
     const item = await StoreItem.findOne({ _id: itemId, householdRefId: householdId });
     if (!item) {
       handleResponse(res, 404, 'Store item not found or does not belong to your household.');
@@ -86,7 +86,11 @@ export const getStoreItem = async (req: AuthenticatedRequest, res: Response): Pr
 export const updateStoreItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const itemId = req.params.id;
-    const {householdId} = req;
+    const { householdId } = req;
+    if (!householdId) {
+      handleResponse(res, 400, 'Household context is missing from request.');
+      return;
+    }
     const updates = { ...req.body };
     delete updates.householdRefId; // never allow changing household linkage
     const updatedItem = await StoreItem.findOneAndUpdate(
@@ -99,7 +103,7 @@ export const updateStoreItem = async (req: AuthenticatedRequest, res: Response):
       return;
     }
     const io = req.app.get('io');
-    io.to(householdId).emit('store_item_updated', { type: 'update', storeItem: updatedItem });
+    io.to(householdId.toString()).emit('store_item_updated', { type: 'update', storeItem: updatedItem });
     handleResponse(res, 200, 'Store item updated successfully.', updatedItem);
   } catch (err: any) {
     if (err instanceof mongoose.Error.CastError) {
@@ -114,14 +118,18 @@ export const updateStoreItem = async (req: AuthenticatedRequest, res: Response):
 export const deleteStoreItem = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const itemId = req.params.id;
-    const {householdId} = req;
+    const { householdId } = req;
+    if (!householdId) {
+      handleResponse(res, 400, 'Household context is missing from request.');
+      return;
+    }
     const deletedItem = await StoreItem.findOneAndDelete({ _id: itemId, householdRefId: householdId });
     if (!deletedItem) {
       handleResponse(res, 404, 'Store item not found or does not belong to your household.');
       return;
     }
     const io = req.app.get('io');
-    io.to(householdId).emit('store_item_updated', { type: 'delete', storeItemId: itemId });
+    io.to(householdId.toString()).emit('store_item_updated', { type: 'delete', storeItemId: itemId });
     res.status(204).json({ status: 'success', data: null });
   } catch (err: any) {
     if (err instanceof mongoose.Error.CastError) {
