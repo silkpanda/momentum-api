@@ -48,17 +48,36 @@ export const purchaseStoreItem = async (req: AuthenticatedRequest, res: Response
     const itemCost = item.cost;
 
     // FIX: Find from 'memberProfiles' array instead of 'childProfiles'
+    console.log('[Purchase] Looking for household:', householdId, 'with member:', memberId);
+
+    // Explicitly cast memberId to ObjectId for comparison/querying if needed
+    // But Mongoose usually handles this in queries. 
+    // Let's verify if `memberId` is string or object.
+
     const household = await Household.findOne({
       _id: householdId,
       'memberProfiles.familyMemberId': memberId,
     });
 
+    console.log('[Purchase] Household found?', !!household);
+
+    if (!household) {
+      // Debugging: Try finding just the household to see if it exists
+      const hhExists = await Household.findById(householdId);
+      console.log('[Purchase] Household exists by ID?', !!hhExists);
+      if (hhExists) {
+        console.log('[Purchase] Members in household:', hhExists.memberProfiles.map(p => p.familyMemberId.toString()));
+        console.log('[Purchase] Target memberId:', memberId);
+      }
+    }
+
     // FIX: Find the profile from 'memberProfiles'
     const memberProfile = household?.memberProfiles.find(
-      (p) => p.familyMemberId.equals(memberId)
+      (p) => p.familyMemberId.toString() === memberId.toString() // Robust comparison
     );
 
     if (!memberProfile) {
+      console.log('[Purchase] Member profile not found in returned household.');
       handleResponse(res, 404, 'Member profile not found in household.', {});
       return;
     }
