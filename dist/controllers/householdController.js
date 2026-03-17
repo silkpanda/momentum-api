@@ -211,7 +211,7 @@ exports.updateHousehold = (0, express_async_handler_1.default)(async (req, res) 
     household.householdName = householdName;
     await household.save();
     // Emit real-time update
-    server_1.io.emit('household_updated', { type: 'update', householdId: id, householdName });
+    server_1.io.to(id).emit('household_updated', { type: 'update', householdId: id, householdName });
     res.status(200).json({
         status: 'success',
         data: household,
@@ -309,7 +309,7 @@ exports.addMemberToHousehold = (0, express_async_handler_1.default)(async (req, 
         select: 'firstName email linkedHouseholds',
     });
     // Emit real-time update
-    server_1.io.emit('household_updated', { type: 'member_add', householdId, member: finalHousehold.memberProfiles.find((p) => p.familyMemberId.equals(familyMemberId)) });
+    server_1.io.to(householdId).emit('household_updated', { type: 'member_add', householdId, member: finalHousehold.memberProfiles.find((p) => p.familyMemberId.equals(familyMemberId)) });
     // Handle Calendar Integration
     if (calendarOption && loggedInUserId) {
         try {
@@ -393,7 +393,7 @@ exports.updateMemberProfile = (0, express_async_handler_1.default)(async (req, r
         memberProfile.focusedTaskId = focusedTaskId;
     await household.save();
     // Emit real-time update
-    server_1.io.emit('household_updated', { type: 'member_update', householdId, memberProfile });
+    server_1.io.to(householdId).emit('household_updated', { type: 'member_update', householdId, memberProfile });
     res.status(200).json(household);
 });
 /**
@@ -472,7 +472,7 @@ exports.removeMemberFromHousehold = (0, express_async_handler_1.default)(async (
     household.memberProfiles = household.memberProfiles.filter((member) => !member._id.equals(memberProfileId));
     await household.save();
     // Emit real-time update
-    server_1.io.emit('household_updated', { type: 'member_remove', householdId, memberProfileId });
+    server_1.io.to(householdId).emit('household_updated', { type: 'member_remove', householdId, memberProfileId });
     res.status(200).json(household);
 });
 // --- INVITE SYSTEM ---

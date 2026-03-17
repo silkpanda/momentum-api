@@ -21,7 +21,7 @@ export const getAllStoreItems = async (req: AuthenticatedRequest, res: Response)
       handleResponse(res, 400, 'Household context is missing from request.');
       return;
     }
-    const items = await StoreItem.find({ householdRefId: householdId });
+    const items = await StoreItem.find({ householdRefId: householdId }).lean();
     res.status(200).json({
       status: 'success',
       results: items.length,
@@ -67,7 +67,7 @@ export const getStoreItem = async (req: AuthenticatedRequest, res: Response): Pr
   try {
     const itemId = req.params.id;
     const { householdId } = req;
-    const item = await StoreItem.findOne({ _id: itemId, householdRefId: householdId });
+    const item = await StoreItem.findOne({ _id: itemId, householdRefId: householdId }).lean();
     if (!item) {
       handleResponse(res, 404, 'Store item not found or does not belong to your household.');
       return;

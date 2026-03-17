@@ -4,7 +4,10 @@ exports.BCRYPT_SALT_ROUNDS = exports.JWT_EXPIRES_IN = exports.JWT_SECRET = void 
 // MANDATORY: UPPER_SNAKE_CASE for Global Constants
 // Use the secret from environment variables if available, otherwise use a fallback.
 // This secret is used for signing and verifying JSON Web Tokens (JWT).
-exports.JWT_SECRET = process.env.JWT_SECRET || 'YOUR_SUPER_SECURE_DEFAULT_SECRET';
+if (!process.env.JWT_SECRET) {
+    throw new Error('FATAL: JWT_SECRET environment variable is missing.');
+}
+exports.JWT_SECRET = process.env.JWT_SECRET;
 // Time until the JWT token expires (e.g., 3 days)
 exports.JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '3d';
 // The number of salt rounds for bcrypt password hashing

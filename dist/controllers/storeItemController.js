@@ -58,7 +58,7 @@ const createStoreItem = async (req, res) => {
             householdRefId: householdId,
         });
         const io = req.app.get('io');
-        io.to(householdId).emit('store_item_updated', { type: 'create', storeItem: newItem });
+        io.to(householdId.toString()).emit('store_item_updated', { type: 'create', storeItem: newItem });
         handleResponse(res, 201, 'Store item created successfully.', newItem);
     }
     catch (err) {
@@ -93,6 +93,10 @@ const updateStoreItem = async (req, res) => {
     try {
         const itemId = req.params.id;
         const { householdId } = req;
+        if (!householdId) {
+            handleResponse(res, 400, 'Household context is missing from request.');
+            return;
+        }
         const updates = { ...req.body };
         delete updates.householdRefId; // never allow changing household linkage
         const updatedItem = await StoreItem_1.default.findOneAndUpdate({ _id: itemId, householdRefId: householdId }, updates, { new: true, runValidators: true });
@@ -101,7 +105,7 @@ const updateStoreItem = async (req, res) => {
             return;
         }
         const io = req.app.get('io');
-        io.to(householdId).emit('store_item_updated', { type: 'update', storeItem: updatedItem });
+        io.to(householdId.toString()).emit('store_item_updated', { type: 'update', storeItem: updatedItem });
         handleResponse(res, 200, 'Store item updated successfully.', updatedItem);
     }
     catch (err) {
@@ -119,13 +123,17 @@ const deleteStoreItem = async (req, res) => {
     try {
         const itemId = req.params.id;
         const { householdId } = req;
+        if (!householdId) {
+            handleResponse(res, 400, 'Household context is missing from request.');
+            return;
+        }
         const deletedItem = await StoreItem_1.default.findOneAndDelete({ _id: itemId, householdRefId: householdId });
         if (!deletedItem) {
             handleResponse(res, 404, 'Store item not found or does not belong to your household.');
             return;
         }
         const io = req.app.get('io');
-        io.to(householdId).emit('store_item_updated', { type: 'delete', storeItemId: itemId });
+        io.to(householdId.toString()).emit('store_item_updated', { type: 'delete', storeItemId: itemId });
         res.status(204).json({ status: 'success', data: null });
     }
     catch (err) {

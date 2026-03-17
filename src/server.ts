@@ -91,6 +91,8 @@ const connectDB = async () => {
 
 // 4. Express App Setup (Must be camelCase: app)
 const app = express();
+// Enable trust proxy for Render/Cloudflare
+app.set('trust proxy', 1);
 const httpServer = createServer(app);
 
 // CORS Configuration
@@ -154,7 +156,10 @@ app.use(helmet()); // Set security HTTP headers
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 3000, // Limit each IP to 3000 requests per windowMs (approx 3/sec avg)
-  message: 'Too many requests from this IP, please try again in 15 minutes'
+  message: 'Too many requests from this IP, please try again in 15 minutes',
+  // Exempt auth routes — the BFF proxy shares a single IP for all mobile users,
+  // so auth endpoints (especially Google sign-in) must never be rate-limited here
+  skip: (req) => req.path.startsWith('/v1/auth/') || req.path.startsWith('/api/v1/auth/'),
 });
 app.use('/api', limiter); // Apply to all API routes
 
@@ -164,12 +169,6 @@ app.use(mongoSanitize());
 app.use(cors(corsOptions)); // Allow cross-origin requests
 app.use(express.json({ limit: '10kb' })); // Parse JSON bodies (limit body size)
 
-// --- DEBUG LOGGER ---
-// This will print exactly what the Core API receives from the BFF
-app.use((req, res, next) => {
-  console.log(`[Core API] Incoming Request: ${req.method} ${req.originalUrl}`);
-  next();
-});
 
 // 5. API Routes
 // Register Auth routes first

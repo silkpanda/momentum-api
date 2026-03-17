@@ -44,6 +44,9 @@ const mongodb_1 = require("mongodb");
 const cors_1 = __importDefault(require("cors"));
 const http_1 = require("http");
 const socket_io_1 = require("socket.io");
+const helmet_1 = __importDefault(require("helmet"));
+const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
+const express_mongo_sanitize_1 = __importDefault(require("express-mongo-sanitize"));
 // Import routers
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const householdRoutes_1 = __importDefault(require("./routes/householdRoutes"));
@@ -167,8 +170,19 @@ exports.io.on('connection', (socket) => {
 // Make io accessible in controllers via req.app.get('io')
 app.set('io', exports.io);
 // Middleware
+// Security Middleware
+app.use((0, helmet_1.default)()); // Set security HTTP headers
+// Limit requests from same API
+const limiter = (0, express_rate_limit_1.default)({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 3000, // Limit each IP to 3000 requests per windowMs (approx 3/sec avg)
+    message: 'Too many requests from this IP, please try again in 15 minutes'
+});
+app.use('/api', limiter); // Apply to all API routes
+// Data Sanitization against NoSQL query injection
+app.use((0, express_mongo_sanitize_1.default)());
 app.use((0, cors_1.default)(corsOptions)); // Allow cross-origin requests
-app.use(express_1.default.json()); // Parse JSON bodies
+app.use(express_1.default.json({ limit: '10kb' })); // Parse JSON bodies (limit body size)
 // --- DEBUG LOGGER ---
 // This will print exactly what the Core API receives from the BFF
 app.use((req, res, next) => {

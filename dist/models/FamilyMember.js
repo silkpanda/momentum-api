@@ -54,10 +54,13 @@ const FamilyMemberSchema = new mongoose_1.Schema({
     sharedData: SharedDataSchema,
     // Calendar integration
     googleCalendar: {
-        accessToken: String,
-        refreshToken: String,
-        expiryDate: Number,
-        selectedCalendarId: String,
+        type: {
+            accessToken: String,
+            refreshToken: String,
+            expiryDate: Number,
+            selectedCalendarId: String,
+        },
+        select: false, // Security: Do not return tokens by default
     },
     // Push tokens
     pushTokens: [{ type: String }],

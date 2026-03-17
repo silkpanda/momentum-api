@@ -62,7 +62,8 @@ export const getAllTasks = asyncHandler(
     // 1. Fetch local tasks
     let tasks = await Task.find({ householdId })
       .populate('assignedTo', 'displayName profileColor')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     // 2. Fetch shared tasks from linked households
     const sharedTasks = await getSharedTasks(householdId);
@@ -92,7 +93,8 @@ export const getTaskById = asyncHandler(
     const { householdId } = req;
 
     const task = await Task.findOne({ _id: taskId, householdId })
-      .populate('assignedTo', 'displayName profileColor');
+      .populate('assignedTo', 'displayName profileColor')
+      .lean();
 
     if (!task) {
       throw new AppError('No task found with that ID in this household.', 404);

@@ -27,16 +27,16 @@ export const getDashboardData = async (req: AuthenticatedRequest, res: Response,
         twoMonthsAhead.setDate(1); // Start of month after next
 
         const [household, tasks, storeItems, events] = await Promise.all([
-            Household.findById(householdId).populate('memberProfiles.familyMemberId'),
-            Task.find({ householdId }),
-            StoreItem.find({ householdId }),
+            Household.findById(householdId).populate('memberProfiles.familyMemberId').lean(),
+            Task.find({ householdId }).lean(),
+            StoreItem.find({ householdId }).lean(),
             Event.find({
                 householdId,
                 startDate: {
                     $gte: oneMonthAgo,
                     $lt: twoMonthsAhead
                 }
-            }).sort({ startDate: 1 })
+            }).sort({ startDate: 1 }).lean()
         ]);
 
         if (!household) {
@@ -126,9 +126,9 @@ export const getFamilyData = async (req: AuthenticatedRequest, res: Response, ne
 
         // Fetch data in parallel
         const [household, tasks, storeItems] = await Promise.all([
-            Household.findById(householdId).populate('memberProfiles.familyMemberId'),
-            Task.find({ householdId }),
-            StoreItem.find({ householdId })
+            Household.findById(householdId).populate('memberProfiles.familyMemberId').lean(),
+            Task.find({ householdId }).lean(),
+            StoreItem.find({ householdId }).lean()
         ]);
 
         if (!household) {
