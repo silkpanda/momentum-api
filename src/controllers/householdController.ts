@@ -1,14 +1,22 @@
 // src/controllers/householdController.ts
 import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
-import mongoose, { Types } from 'mongoose'; // Import mongoose for CastError check
+import mongoose, { Types } from 'mongoose';
 import Household, { IHouseholdMemberProfile } from '../models/Household';
 import FamilyMember from '../models/FamilyMember';
-import Task from '../models/Task'; // Required for cleanup
-import StoreItem from '../models/StoreItem'; // Required for cleanup
+import Task from '../models/Task';
+import StoreItem from '../models/StoreItem';
+import Quest from '../models/Quest';
+import Event from '../models/Event';
+import Routine from '../models/Routine';
+import Notification from '../models/Notification';
+import MealPlan from '../models/MealPlan';
+import WishlistItem from '../models/WishlistItem';
+import ChildLinkCode from '../models/ChildLinkCode';
+import HouseholdLink from '../models/HouseholdLink';
 import { AuthenticatedRequest } from '../middleware/authMiddleware';
 import AppError from '../utils/AppError';
-import { io } from '../server'; // Import Socket.io instance
+import { io } from '../server';
 import { createMemberCalendar, updateGoogleCalendarColor } from '../services/googleCalendarService';
 
 /**
@@ -275,9 +283,19 @@ export const deleteHousehold = asyncHandler(
       throw new AppError('Unauthorized. Only Parents can delete a household.', 403);
     }
 
-    // Cascade Delete: Clean up related data
-    await Task.deleteMany({ householdRefId: id });
-    await StoreItem.deleteMany({ householdRefId: id });
+    // Cascade Delete: clean up ALL data belonging to this household
+    await Promise.all([
+      Task.deleteMany({ householdId: id }),
+      StoreItem.deleteMany({ householdRefId: id }),
+      Quest.deleteMany({ householdId: id }),
+      Event.deleteMany({ householdId: id }),
+      Routine.deleteMany({ householdId: id }),
+      Notification.deleteMany({ householdId: id }),
+      MealPlan.deleteMany({ householdId: id }),
+      WishlistItem.deleteMany({ householdId: id }),
+      ChildLinkCode.deleteMany({ householdId: id }),
+      HouseholdLink.deleteMany({ $or: [{ household1: id }, { household2: id }] }),
+    ]);
 
     await Household.findByIdAndDelete(id);
 
@@ -313,37 +331,14 @@ export const addMemberToHousehold = asyncHandler(
       }
     }
 
-    if (!familyMemberId) {
-      // Allow creating both Child AND Parent roles without an existing profile
-      // This supports the flow where a parent adds a co-parent or another child profile
-
-      const emailPrefix = firstName.toLowerCase().replace(/\s/g, '');
-      const roleSuffix = role.toLowerCase();
-
-      const newMember = await FamilyMember.create({
-        firstName,
-        lastName: 'Household',
-        email: `${emailPrefix}-${roleSuffix}-${new Date().getTime()}@momentum.com`,
-        password: `temp-${Math.random()}`,
-        onboardingCompleted: false,
-        pinSetupCompleted: false,
-      });
-
-      familyMemberId = newMember._id;
-    }
-
     const household = await Household.findById(householdId);
-
-    if (!household) {
-      throw new AppError('Household not found.', 404);
-    }
+    if (!household) throw new AppError('Household not found.', 404);
 
     const isParent = household.memberProfiles.some(
       (member) =>
         member.familyMemberId.equals(loggedInUserId) &&
         member.role === 'Parent',
     );
-
     if (!isParent) {
       throw new AppError(
         'Unauthorized. Only parents of this household can add new members.',
@@ -351,32 +346,57 @@ export const addMemberToHousehold = asyncHandler(
       );
     }
 
-    const isAlreadyMember = household.memberProfiles.some((member) =>
-      member.familyMemberId.equals(familyMemberId),
-    );
+    // Use a transaction so that if the household save fails, the newly created
+    // FamilyMember document is also rolled back (no orphaned records).
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    let updatedHousehold: typeof household;
 
-    if (isAlreadyMember) {
-      throw new AppError(
-        'This family member is already in the household.',
-        400,
+    try {
+      if (!familyMemberId) {
+        const emailPrefix = firstName.toLowerCase().replace(/\s/g, '');
+        const roleSuffix = role.toLowerCase();
+        const [newMember] = await FamilyMember.create([{
+          firstName,
+          lastName: 'Household',
+          email: `${emailPrefix}-${roleSuffix}-${new Date().getTime()}@momentum.com`,
+          password: `temp-${Math.random()}`,
+          onboardingCompleted: false,
+          pinSetupCompleted: false,
+        }], { session });
+        familyMemberId = newMember._id;
+      }
+
+      const isAlreadyMember = household.memberProfiles.some((member) =>
+        member.familyMemberId.equals(familyMemberId),
       );
+      if (isAlreadyMember) {
+        throw new AppError('This family member is already in the household.', 400);
+      }
+
+      const memberExists = await FamilyMember.findById(familyMemberId).session(session);
+      if (!memberExists) {
+        throw new AppError('No family member found with the provided ID.', 404);
+      }
+
+      const newMemberProfile: IHouseholdMemberProfile = {
+        familyMemberId: new Types.ObjectId(familyMemberId),
+        displayName: displayName || memberExists.firstName,
+        profileColor: profileColor!,
+        role: role as 'Parent' | 'Child',
+        pointsTotal: 0,
+      };
+
+      household.memberProfiles.push(newMemberProfile);
+      updatedHousehold = await household.save({ session });
+
+      await session.commitTransaction();
+    } catch (err) {
+      await session.abortTransaction();
+      throw err;
+    } finally {
+      session.endSession();
     }
-
-    const memberExists = await FamilyMember.findById(familyMemberId);
-    if (!memberExists) {
-      throw new AppError('No family member found with the provided ID.', 404);
-    }
-
-    const newMemberProfile: IHouseholdMemberProfile = {
-      familyMemberId: new Types.ObjectId(familyMemberId),
-      displayName: displayName || memberExists.firstName,
-      profileColor: profileColor!,
-      role: role as 'Parent' | 'Child',
-      pointsTotal: 0,
-    };
-
-    household.memberProfiles.push(newMemberProfile);
-    const updatedHousehold = await household.save();
 
     const finalHousehold = await updatedHousehold.populate({
       path: 'memberProfiles.familyMemberId',

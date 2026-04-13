@@ -120,11 +120,13 @@ export const updateTask = asyncHandler(
     const { householdId } = req;
     if (!householdId) throw new AppError('Authentication error', 401);
 
-    const { title, description, pointsValue, assignedTo, dueDate, status } = req.body;
+    // `status` is intentionally excluded — status transitions must go through
+    // the dedicated /complete, /approve, and /reject endpoints.
+    const { title, description, pointsValue, assignedTo, dueDate } = req.body;
 
     const task = await Task.findOneAndUpdate(
       { _id: taskId, householdId },
-      { title, description, pointsValue, assignedTo, dueDate, status },
+      { title, description, pointsValue, assignedTo, dueDate },
       { new: true, runValidators: true },
     );
 

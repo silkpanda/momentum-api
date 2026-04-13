@@ -69,6 +69,8 @@ const ChildLinkCodeSchema = new Schema<IChildLinkCode>(
 
 // Index for cleanup of expired codes
 ChildLinkCodeSchema.index({ expiresAt: 1, status: 1 });
+// TTL index: MongoDB will auto-delete documents after their expiresAt time
+ChildLinkCodeSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 // Method to check if code is valid
 ChildLinkCodeSchema.methods.isValid = function (): boolean {

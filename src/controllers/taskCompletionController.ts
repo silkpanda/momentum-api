@@ -114,29 +114,27 @@ export const approveTask = asyncHandler(
         const { householdId } = req;
         if (!householdId) throw new AppError('Authentication error', 401);
 
-        // 1. Find Task
-        const task = await Task.findOne({
-            _id: taskId,
-            householdId,
-            status: 'PendingApproval',
-        });
+        // 1. Atomically claim the approval by updating status in a single operation.
+        // This prevents two concurrent approvals from both seeing 'PendingApproval'
+        // and awarding duplicate streak bonuses.
+        const task = await Task.findOneAndUpdate(
+            { _id: taskId, householdId, status: 'PendingApproval' },
+            { status: 'Approved' },
+            { new: true },
+        );
 
         if (!task || !task.completedBy) {
             throw new AppError('Task not found or not pending approval.', 404);
         }
 
-        // 2. Check for Streak Eligibility
-        // (If all OTHER tasks assigned to this user are complete, we update streak)
-        const allMemberTasks = await Task.find({
+        // 2. Check for Streak Eligibility AFTER this task is already marked Approved,
+        // so it no longer appears in the remaining-pending count.
+        const remainingPending = await Task.countDocuments({
             householdId,
             assignedTo: task.completedBy,
             status: { $in: ['Pending', 'PendingApproval'] },
         });
-
-        const remainingPending = allMemberTasks.filter(
-            (t: any) => !t._id.equals(taskId),
-        );
-        const isStreakEligible = remainingPending.length === 0;
+        const isStreakEligible = remainingPending === 0;
 
         // 3. Award Points & Update Streak via Service
         const io = req.app.get('io');
@@ -147,10 +145,6 @@ export const approveTask = asyncHandler(
             task.pointsValue,
             isStreakEligible,
         );
-
-        // 4. Update Task
-        task.status = 'Approved';
-        await task.save();
 
         // 5. Emit
         emitTaskEvent(io, householdId, 'task_approved', {

@@ -132,6 +132,7 @@ const QuestSchema = new Schema<IQuest>({
 // Indexes for performance
 QuestSchema.index({ householdId: 1, isActive: 1 });
 QuestSchema.index({ 'recurrence.nextReset': 1 });
+QuestSchema.index({ expiresAt: 1 });
 
 // Virtual to check if quest is claimable
 QuestSchema.virtual('isClaimable').get(function (this: IQuest) {

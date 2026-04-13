@@ -54,13 +54,16 @@ export const getSharedTasks = async (householdId: Types.ObjectId | string) => {
 };
 
 /**
- * Sync points updates to linked households
+ * Sync points updates to linked households.
+ * Accepts an optional Mongoose session so the caller can include this
+ * operation in the same transaction as the primary household save.
  */
 export const syncPointsToLinkedHouseholds = async (
     io: any,
     childFamilyMemberId: Types.ObjectId | string,
     primaryHouseholdId: Types.ObjectId | string,
-    pointsDelta: number
+    pointsDelta: number,
+    session?: mongoose.ClientSession
 ) => {
     try {
         const activeLinks = await HouseholdLink.find({
@@ -70,24 +73,21 @@ export const syncPointsToLinkedHouseholds = async (
         });
 
         for (const link of activeLinks) {
-            // Check if points are shared
             if (link.sharingSettings && link.sharingSettings.points === 'shared') {
                 const otherHouseholdId = link.household1.toString() === primaryHouseholdId.toString()
                     ? link.household2
                     : link.household1;
 
-                const otherHousehold = await Household.findById(otherHouseholdId);
+                const otherHousehold = await Household.findById(otherHouseholdId).session(session ?? null);
                 if (otherHousehold) {
                     const otherMemberProfile = otherHousehold.memberProfiles.find(p =>
                         p.familyMemberId.toString() === childFamilyMemberId.toString()
                     );
 
                     if (otherMemberProfile) {
-                        // Update points in the other household
                         otherMemberProfile.pointsTotal = (otherMemberProfile.pointsTotal || 0) + pointsDelta;
-                        await otherHousehold.save();
+                        await otherHousehold.save({ session });
 
-                        // Emit update to other household
                         if (io && otherMemberProfile._id) {
                             emitMemberUpdate(
                                 io,
@@ -102,5 +102,6 @@ export const syncPointsToLinkedHouseholds = async (
         }
     } catch (syncError) {
         console.error('Error syncing points to linked households:', syncError);
+        throw syncError; // Re-throw so the caller's transaction can roll back
     }
 };

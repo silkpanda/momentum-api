@@ -45,6 +45,7 @@ const StoreItemSchema = new Schema<IStoreItem>({
     type: Schema.Types.ObjectId,
     ref: 'Household',
     required: true,
+    index: true,
   },
 }, {
   timestamps: true,

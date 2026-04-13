@@ -67,6 +67,7 @@ const notificationSchema = new Schema<INotification>(
 // Index for efficient querying of user's notifications
 notificationSchema.index({ recipientId: 1, createdAt: -1 });
 notificationSchema.index({ householdId: 1 });
+notificationSchema.index({ recipientId: 1, isRead: 1 });
 
 const Notification = mongoose.model<INotification>('Notification', notificationSchema);
 

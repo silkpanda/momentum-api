@@ -97,64 +97,31 @@ export const verifyPin = async (req: Request, res: Response) => {
             return res.status(400).json({ status: 'error', message: 'Member ID and Household ID are required' });
         }
 
-        // Find the household and member
+        // Verify the household exists before doing anything
         const household = await Household.findById(householdId);
         if (!household) {
             return res.status(404).json({ status: 'error', message: 'Household not found' });
         }
 
-        // Find the member in the household
-        const member = household.memberProfiles.find((m: IHouseholdMemberProfile) => m._id?.toString() === memberId);
-        let user;
-        if (!member) {
-            // Fallback: treat memberId as a FamilyMember ID directly
-            console.log('[PIN Verify] Member not found in household, trying direct FamilyMember lookup');
-            user = await FamilyMember.findById(memberId).select('+pin');
-            if (!user) {
-                return res.status(404).json({ status: 'error', message: 'User not found' });
-            }
-        } else {
-            // Get the FamilyMember document with PIN
-            user = await FamilyMember.findById(member.familyMemberId).select('+pin');
-            if (!user) {
-                return res.status(404).json({ status: 'error', message: 'User not found' });
-            }
-        }
+        // Find the member profile in the household (the memberId should belong to this household)
+        const memberProfile = household.memberProfiles.find(
+            (m: IHouseholdMemberProfile) => m._id?.toString() === memberId
+        ) ?? null;
 
-
-        // Check if PIN is set up
-        if (!user.pin || !user.pinSetupCompleted) {
-            console.log('[PIN Verify] PIN not set up:', { hasPin: !!user.pin, pinSetupCompleted: user.pinSetupCompleted });
-            return res.status(400).json({
-                status: 'error',
-                message: 'PIN not set up for this user',
-                requiresSetup: true,
-            });
-        }
-
-        console.log('[PIN Verify] Comparing PIN for user:', user._id);
-        console.log('[PIN Verify] PIN hash length:', user.pin?.length);
-        console.log('[PIN Verify] Entered PIN length:', pin.length);
-
-        // Verify PIN
-        // Determine member profile and user
-        let memberProfile: IHouseholdMemberProfile | null = null;
+        // Resolve the underlying FamilyMember document with PIN field
         let userDoc: any;
-        if (member) {
-            memberProfile = member;
-            userDoc = await FamilyMember.findById(member.familyMemberId).select('+pin');
+        if (memberProfile) {
+            userDoc = await FamilyMember.findById(memberProfile.familyMemberId).select('+pin');
         } else {
-            // member not found, treat memberId as FamilyMember ID
-            console.log('[PIN Verify] Member not found in household, using memberId as FamilyMember ID');
+            // Fallback: treat memberId as a direct FamilyMember ID
             userDoc = await FamilyMember.findById(memberId).select('+pin');
         }
+
         if (!userDoc) {
             return res.status(404).json({ status: 'error', message: 'User not found' });
         }
 
-        // Check if PIN is set up
         if (!userDoc.pin || !userDoc.pinSetupCompleted) {
-            console.log('[PIN Verify] PIN not set up:', { hasPin: !!userDoc.pin, pinSetupCompleted: userDoc.pinSetupCompleted });
             return res.status(400).json({
                 status: 'error',
                 message: 'PIN not set up for this user',
@@ -162,19 +129,12 @@ export const verifyPin = async (req: Request, res: Response) => {
             });
         }
 
-        console.log('[PIN Verify] Comparing PIN for user:', userDoc._id);
-        console.log('[PIN Verify] PIN hash length:', userDoc.pin?.length);
-        console.log('[PIN Verify] Entered PIN length:', pin.length);
-
-        // Verify PIN
         const isValid = await userDoc.comparePin(pin);
-        console.log('[PIN Verify] PIN comparison result:', isValid);
 
         if (!isValid) {
             return res.status(401).json({ status: 'error', message: 'Incorrect PIN' });
         }
 
-        // Update last verification timestamp
         userDoc.lastPinVerification = new Date();
         await userDoc.save();
 

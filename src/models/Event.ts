@@ -107,6 +107,7 @@ const EventSchema = new Schema<IEvent>(
 EventSchema.index({ householdId: 1, startDate: 1 });
 EventSchema.index({ attendees: 1 });
 EventSchema.index({ googleEventId: 1 });
+EventSchema.index({ createdBy: 1, startDate: -1 });
 
 const Event = model<IEvent>('Event', EventSchema);
 
